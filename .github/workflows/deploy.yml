@@ -1,0 +1,69 @@
+name: Deploy CDK Stack
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Permissions needed for Github OIDC
+permissions:
+  id-token: write # Required for requesting the JWT
+  contents: read # Required for checking out code
+
+jobs:
+  deploy:
+    name: Deploy CDK Stack to AWS
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18' # Or '20', LTS version compatible with CDK version
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-session-name: GitHubActionsCDKDeploy # Optional descriptive name for the session
+
+      - name: Install AWS CDK CLI
+        run: npm install -g aws-cdk
+
+      - name: Install Python Dependencies
+        working-directory: ./iac
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          pip install aws-cdk-lib constructs aws-cdk.aws-lambda aws-cdk.aws-stepfunctions aws-cdk.aws-stepfunctions-tasks aws-cdk.aws-s3 aws-cdk.aws-dynamodb aws-cdk.aws-apigatewayv2 aws-cdk.aws-iam aws-cdk.aws-secretsmanager aws-cdk.aws-logs
+
+      - name: CDK Bootstrap
+        working-directory: ./iac
+        run: |
+          source .venv/bin/activate
+          cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ secrets.AWS_REGION }} # You might need AWS_ACCOUNT_ID as another secret
+
+      - name: CDK Synth
+        working-directory: ./iac
+        run: |
+          source .venv/bin/activate
+          cdk synth
+
+      - name: CDK Deploy
+        working-directory: ./iac
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          source .venv/bin/activate
+          cdk deploy --all --require-approval never

@@ -40,18 +40,32 @@ jobs:
       - name: Install AWS CDK CLI
         run: npm install -g aws-cdk
 
+      # Install ALL dependencies together WITH pinned versions and verbose output
       - name: Install Python Dependencies
         working-directory: ./iac
         run: |
           python -m venv .venv
           source .venv/bin/activate
-          pip install aws-cdk-lib constructs aws-cdk.aws-lambda aws-cdk.aws-stepfunctions aws-cdk.aws-stepfunctions-tasks aws-cdk.aws-s3 aws-cdk.aws-dynamodb aws-cdk.aws-apigatewayv2 aws-cdk.aws-iam aws-cdk.aws-secretsmanager aws-cdk.aws-logs
+          pip install --upgrade pip setuptools
+          pip cache purge             
+          pip install -vvv \
+            aws-cdk-lib==2.140.0 \
+            constructs==10.3.0 \
+            aws-cdk.aws-lambda==2.140.0 \
+            aws-cdk.aws-stepfunctions==2.140.0 \
+            aws-cdk.aws-stepfunctions-tasks==2.140.0 \
+            aws-cdk.aws-s3==2.140.0 \
+            aws-cdk.aws-dynamodb==2.140.0 \
+            aws-cdk.aws-apigatewayv2==2.140.0 \
+            aws-cdk.aws-iam==2.140.0 \
+            aws-cdk.aws-secretsmanager==2.140.0 \
+            aws-cdk.aws-logs==2.140.0
 
       - name: CDK Bootstrap
         working-directory: ./iac
         run: |
           source .venv/bin/activate
-          cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ secrets.AWS_REGION }} # You might need AWS_ACCOUNT_ID as another secret
+          cdk bootstrap aws://${{ secrets.AWS_ACCOUNT_ID }}/${{ secrets.AWS_REGION }}
 
       - name: CDK Synth
         working-directory: ./iac

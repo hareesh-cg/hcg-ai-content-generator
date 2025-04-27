@@ -49,17 +49,8 @@ jobs:
           pip install --upgrade pip setuptools
           pip cache purge             
           pip install -vvv \
-            aws-cdk-lib==2.140.0 \
-            constructs==10.3.0 \
-            aws-cdk.aws-lambda==2.140.0 \
-            aws-cdk.aws-stepfunctions==2.140.0 \
-            aws-cdk.aws-stepfunctions-tasks==2.140.0 \
-            aws-cdk.aws-s3==2.140.0 \
-            aws-cdk.aws-dynamodb==2.140.0 \
-            aws-cdk.aws-apigatewayv2==2.140.0 \
-            aws-cdk.aws-iam==2.140.0 \
-            aws-cdk.aws-secretsmanager==2.140.0 \
-            aws-cdk.aws-logs==2.140.0
+            aws-cdk-lib==2.192.0 \
+            constructs==10.4.2
 
       - name: CDK Bootstrap
         working-directory: ./iac

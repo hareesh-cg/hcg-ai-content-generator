@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18' # Or '20', LTS version compatible with CDK version
+          node-version: '20' # Or '20', LTS version compatible with CDK version
 
       - name: Setup Python
         uses: actions/setup-python@v5

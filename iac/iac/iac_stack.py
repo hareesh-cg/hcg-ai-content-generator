@@ -66,7 +66,7 @@ class IacStack(cdk.Stack):
             self, "ResearchLambda",
             entry="../lambda_handlers", # ** ADJUST PATH TO YOUR LAMBDA CODE DIRECTORY **
             runtime=cdk.aws_lambda.Runtime.PYTHON_3_11, # Or PYTHON_3_12 etc.
-            index="research_handler",       # File containing the handler function
+            index="research_handler.py",       # File containing the handler function
             handler="main",           # Function name to execute
             timeout=cdk.Duration.minutes(5), # Increase timeout for potentially long AI calls
             memory_size=256, # Adjust as needed

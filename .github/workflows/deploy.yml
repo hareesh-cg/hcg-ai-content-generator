@@ -65,11 +65,17 @@ jobs:
           source .venv/bin/activate
           cdk synth
 
-      - name: CDK Deploy
+      - name: CDK Destroy
         working-directory: ./iac
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           source .venv/bin/activate
-          cdk deploy --all --require-approval never
+          cdk destroy --all --force
+
+      #- name: CDK Deploy
+      #  working-directory: ./iac
+      #  env:
+      #    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      #    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      #  run: |
+      #    source .venv/bin/activate
+      #    cdk deploy --all --require-approval never

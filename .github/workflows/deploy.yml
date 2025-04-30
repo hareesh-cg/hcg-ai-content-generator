@@ -24,14 +24,6 @@ env:
 
   OPENAI_API_KEY_SECRET: ${{ secrets.OPENAI_API_KEY_FOR_LAMBDA }}
 
-  ENV_VARS: |
-    "Variables={
-    CONTENT_BUCKET_NAME=${{ CONTENT_BUCKET_NAME }},
-    POSTS_TABLE_NAME=${{ POSTS_TABLE_NAME }},
-    SETTINGS_TABLE_NAME=${{ SETTINGS_TABLE_NAME }},
-    OPENAI_API_KEY=${{ OPENAI_API_KEY_SECRET }}
-    }"
-
 jobs:
   deploy:
     name: Build and Deploy Lambda Code
@@ -88,11 +80,17 @@ jobs:
       - name: Configure Research Lambda
         run: |
           echo "Configuring Research Lambda: ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }}"
+          ENV_VARS="Variables={
+            CONTENT_BUCKET_NAME=${{ CONTENT_BUCKET_NAME }},
+            POSTS_TABLE_NAME=${{ POSTS_TABLE_NAME }},
+            SETTINGS_TABLE_NAME=${{ SETTINGS_TABLE_NAME }},
+            OPENAI_API_KEY=${{ OPENAI_API_KEY_SECRET }}
+          }"
           aws lambda update-function-configuration \
             --function-name ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }} \
             --role ${{ secrets.AWS_EXECUTION_ROLE_ARN }} \
             --handler ${{ env.RESEARCH_LAMBDA_HANDLER }} \
-            --environment "${{ env.ENV_VARS }}" \
+            --environment "$ENV_VARS" \
             --region ${{ env.AWS_REGION }}
           echo "Research Lambda configuration complete."
 

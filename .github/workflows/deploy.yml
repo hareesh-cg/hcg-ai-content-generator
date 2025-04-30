@@ -131,7 +131,12 @@ jobs:
           ENV_VARS+="CONTENT_BUCKET_NAME=${{ env.CONTENT_BUCKET_NAME }},"
           ENV_VARS+="POSTS_TABLE_NAME=${{ env.POSTS_TABLE_NAME }},"
           ENV_VARS+="SETTINGS_TABLE_NAME=${{ env.SETTINGS_TABLE_NAME }},"
-          ENV_VARS+="OPENAI_API_KEY=${{ env.OPENAI_API_KEY_SECRET }}"
+          if [[ -n "${{ env.OPENAI_API_KEY_SECRET }}" ]]; then
+            echo "Adding OPENAI_API_KEY to environment variables."
+            ENV_VARS+=",OPENAI_API_KEY=${{ env.OPENAI_API_KEY_SECRET }}"
+          else
+            echo "Warning: OPENAI_API_KEY secret is empty or not set. Skipping."
+          fi
           ENV_VARS+="}"
           aws lambda update-function-configuration \
             --function-name ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }} \

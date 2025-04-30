@@ -3,6 +3,10 @@ import boto3
 from openai import OpenAI
 import json # To potentially load settings if passed as JSON string
 
+from utils.logger_config import get_logger
+
+logger = get_logger(__name__)
+
 # Initialize clients (can reuse if module loaded multiple times, but safe to repeat)
 s3_client = boto3.client('s3')
 try:
@@ -11,7 +15,7 @@ try:
          raise ValueError("OPENAI_API_KEY environment variable not set or invalid")
     llm_client = OpenAI(api_key=api_key)
 except Exception as e:
-    print(f"Error initializing LLM client: {e}")
+    logger.error(f"Error initializing LLM client: {e}")
     llm_client = None
 
 def rewrite_article(post_id: str, raw_article_uri: str, website_settings: dict, bucket_name: str) -> str:
@@ -39,7 +43,7 @@ def rewrite_article(post_id: str, raw_article_uri: str, website_settings: dict, 
     if not all([post_id, raw_article_uri]):
         raise ValueError("Missing required input: postId or rawArticleUri")
 
-    print(f"Rewriting article for Post ID: {post_id} from URI: {raw_article_uri}")
+    logger.info(f"Rewriting article for Post ID: {post_id} from URI: {raw_article_uri}")
 
     # --- 1. Download Raw Article from S3 ---
     try:
@@ -51,13 +55,13 @@ def rewrite_article(post_id: str, raw_article_uri: str, website_settings: dict, 
         source_bucket = uri_parts[0]
         source_key = uri_parts[1]
         
-        print(f"Downloading from bucket '{source_bucket}', key '{source_key}'")
+        logger.info(f"Downloading from bucket '{source_bucket}', key '{source_key}'")
         s3_object = s3_client.get_object(Bucket=source_bucket, Key=source_key)
         raw_article_content = s3_object['Body'].read().decode('utf-8')
-        print(f"Downloaded raw article. Length: {len(raw_article_content)}")
+        logger.info(f"Downloaded raw article. Length: {len(raw_article_content)}")
         
     except Exception as e:
-        print(f"Error downloading raw article from S3: {e}")
+        logger.error(f"Error downloading raw article from S3: {e}")
         # Re-raise or handle appropriately
         raise ValueError(f"Failed to download raw article from {raw_article_uri}") from e
 
@@ -91,7 +95,7 @@ def rewrite_article(post_id: str, raw_article_uri: str, website_settings: dict, 
 
     Please provide the rewritten article below:
     """
-    print("Constructed Rewrite Prompt - sending to LLM...")
+    logger.debug("Constructed Rewrite Prompt - sending to LLM...")
 
     # --- 3. Call LLM API ---
     response = llm_client.chat.completions.create(
@@ -106,20 +110,20 @@ def rewrite_article(post_id: str, raw_article_uri: str, website_settings: dict, 
     if not refined_article_content:
          raise ValueError("LLM returned empty content after rewrite request.")
 
-    print("LLM rewrite response received. Content length:", len(refined_article_content))
+    logger.info("LLM rewrite response received. Content length:", len(refined_article_content))
     # You might want to add a word count check here before saving
 
     # --- 4. Save Refined Article to S3 ---
     # Define a new key for the refined article
     refined_s3_key = f"posts/{post_id}/refined_article.txt"
-    print(f"Uploading refined article to s3://{bucket_name}/{refined_s3_key}")
+    logger.info(f"Uploading refined article to s3://{bucket_name}/{refined_s3_key}")
     s3_client.put_object(
         Bucket=bucket_name,
         Key=refined_s3_key,
         Body=refined_article_content.encode('utf-8'),
         ContentType='text/plain'
     )
-    print("Upload successful.")
+    logger.info("Upload successful.")
 
     refined_s3_uri = f"s3://{bucket_name}/{refined_s3_key}"
     return refined_s3_uri

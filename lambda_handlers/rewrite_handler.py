@@ -2,7 +2,12 @@ import json
 import os
 from agents.rewrite_openai import rewrite_article # Import the specific agent
 
-print("Rewrite Handler Lambda Initialized")
+from utils.logger_config import setup_logging, get_logger
+setup_logging() # Configure root logger based on ENV var
+
+logger = get_logger(__name__)
+
+logger.info("Rewrite Handler Lambda Initialized")
 
 # Get bucket name from environment variable once
 bucket_name = os.environ.get('CONTENT_BUCKET_NAME')
@@ -12,10 +17,10 @@ def main(event, context):
     AWS Lambda handler for the article rewrite step.
     Calls the rewrite agent.
     """
-    print("Received event:", json.dumps(event, indent=2))
+    logger.info("Received event: %s", json.dumps(event, indent=2))
 
     if not bucket_name:
-         print("Error: CONTENT_BUCKET_NAME environment variable not set.")
+         logger.error("Error: CONTENT_BUCKET_NAME environment variable not set.")
          raise ValueError("CONTENT_BUCKET_NAME not configured")
 
     try:
@@ -50,6 +55,6 @@ def main(event, context):
         return output
 
     except Exception as e:
-        print(f"Error processing rewrite event for Post ID {post_id}: {e}")
+        logger.error(f"Error processing rewrite event for Post ID {post_id}: {e}")
         # Raise the exception to signal failure to Step Functions
         raise e

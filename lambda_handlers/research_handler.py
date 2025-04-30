@@ -3,11 +3,11 @@ import json
 import os
 from utils.dynamodb_helper import DynamoDBHelper # Import the new helper
 from agents.research_openai import generate_research_draft # Import the agent
-import logging
 
-logger = logging.getLogger(__name__)
-log_level = os.environ.get('LOG_LEVEL', 'DEBUG').upper()
-logger.setLevel(log_level)
+from utils.logger_config import setup_logging, get_logger
+setup_logging() # Configure root logger based on ENV var
+
+logger = get_logger(__name__)
 
 logger.info("Research Handler Lambda Initialized (API Gateway Trigger)")
 
@@ -15,7 +15,7 @@ logger.info("Research Handler Lambda Initialized (API Gateway Trigger)")
 try:
     db_helper = DynamoDBHelper()
 except ValueError as e:
-    logger.error(f"CRITICAL INIT ERROR: {e}")
+    logger.critical(f"CRITICAL INIT ERROR: {e}")
     db_helper = None # Ensure handler fails cleanly if init fails
 
 # Get bucket name from environment variable once
@@ -40,7 +40,7 @@ def main(event, context):
     API Gateway handler for triggering the research process.
     GET /research/website/{websiteId}/post/{postId}
     """
-    logger.info("Received API Gateway event:", json.dumps(event, indent=2))
+    logger.info("Received API Gateway event: %s", json.dumps(event, indent=2))
 
     # Check if initialization failed
     if not db_helper:

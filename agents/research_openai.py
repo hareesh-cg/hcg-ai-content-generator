@@ -1,11 +1,10 @@
 import os
 import boto3
 from openai import OpenAI # Or your chosen LLM client library
-import logging
 
-logger = logging.getLogger(__name__)
-log_level = os.environ.get('LOG_LEVEL', 'DEBUG').upper()
-logger.setLevel(log_level)
+from utils.logger_config import get_logger
+
+logger = get_logger(__name__)
 
 # Initialize clients (can still be global in this module if desired)
 s3_client = boto3.client('s3')

@@ -2,11 +2,10 @@
 import os
 import boto3
 from botocore.exceptions import ClientError
-import logging
 
-logger = logging.getLogger(__name__)
-log_level = os.environ.get('LOG_LEVEL', 'DEBUG').upper()
-logger.setLevel(log_level)
+from utils.logger_config import get_logger
+
+logger = get_logger(__name__)
 
 class DynamoDBHelper:
     """Handles interactions with DynamoDB tables."""

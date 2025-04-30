@@ -7,45 +7,36 @@ from utils.logger_config import get_logger
 logger = get_logger(__name__)
 
 # Initialize clients (can still be global in this module if desired)
-s3_client = boto3.client('s3')
 try:
     api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key or api_key == "NOT_SET":
          raise ValueError("OPENAI_API_KEY environment variable not set or invalid")
     llm_client = OpenAI(api_key=api_key)
+    logger.info("OpenAI client initialized.")
 except Exception as e:
-    logger.error(f"Error initializing LLM client: {e}")
+    logger.exception("CRITICAL: Error initializing LLM client.")
     llm_client = None
 
-def generate_research_draft(post_id: str, blog_title: str, website_id: str, website_settings: dict, bucket_name: str) -> str:
+def generate_research_draft(blog_title: str, website_settings: dict) -> str:
     """
-    Generates the research draft using OpenAI and saves it to S3.
+    Generates the research draft text using OpenAI based on input context.
 
     Args:
-        post_id: The ID of the post.
         blog_title: The title of the blog post.
-        website_id: The ID of the website (for S3 path).
         website_settings: Dictionary containing website context.
-        bucket_name: The name of the S3 bucket to save the draft.
 
     Returns:
-        The S3 URI of the saved raw article.
+        The generated raw article text as a string.
 
     Raises:
-        ValueError: If inputs are missing or LLM fails.
-        Exception: For S3 or other unexpected errors.
+        ValueError: If LLM client isn't initialized or LLM fails.
+        Exception: For other unexpected errors during LLM call.
     """
     if not llm_client:
         logger.error("LLM Client not initialized during function call.")
         raise ValueError("LLM Client not initialized.")
-    if not bucket_name:
-         logger.error("S3 Bucket name environment variable not configured.")
-         raise ValueError("S3 Bucket name environment variable not configured.")
-    if not all([post_id, blog_title]):
-        logger.error("Missing required input (postId, blogTitle, or websiteId).")
-        raise ValueError("Missing required input: postId or blogTitle")
 
-    logger.info(f"Generating research draft for Post ID: {post_id}, Title: {blog_title}")
+    logger.info(f"Generating research draft for Title: {blog_title}")
 
     # Extract context from settings
     website_desc = website_settings.get('websiteDescription', '')
@@ -75,7 +66,7 @@ def generate_research_draft(post_id: str, blog_title: str, website_id: str, webs
     try:
         # Call LLM API
         response = llm_client.chat.completions.create(
-            model="gpt-4o", # Or your chosen model
+            model="gpt-4o",
             messages=[
                 {"role": "system", "content": "You are an expert researcher and technical writer."},
                 {"role": "user", "content": prompt}
@@ -84,7 +75,7 @@ def generate_research_draft(post_id: str, blog_title: str, website_id: str, webs
         )
         raw_article_content = response.choices[0].message.content
         if not raw_article_content:
-            logger.error("LLM returned empty content for postId: %s", post_id)
+            logger.error("LLM returned empty content for title: %s", blog_title)
             raise ValueError("LLM returned empty content.")
 
         logger.info("LLM response received. Content length:", len(raw_article_content))
@@ -92,6 +83,5 @@ def generate_research_draft(post_id: str, blog_title: str, website_id: str, webs
         return raw_article_content
 
     except Exception as e:
-        logger.exception(f"An error occurred during research draft generation for postId {post_id}")
+        logger.exception(f"An error occurred during research draft generation for title '{blog_title}': {e}")
         raise
-    

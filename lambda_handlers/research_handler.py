@@ -62,6 +62,7 @@ def main(event, context):
 
     try:
         # --- 1. Parse Path Parameters ---
+        logger.info("--- 1. Parse Path Parameters ---")
         path_params = event.get('pathParameters', {})
         website_id_from_path = path_params.get('websiteId')
         post_id_from_path = path_params.get('postId')
@@ -72,7 +73,10 @@ def main(event, context):
 
         logger.info(f"Extracted websiteId: {website_id_from_path}, postId: {post_id_from_path}")
 
+        db_helper.update_post_status(post_id_from_path, "RESEARCH_STARTED")
+
         # --- 2. Fetch Post & Validate Website ID using Helper ---
+        logger.info("--- 2. Fetch Post & Validate Website ID using Helper ---")
         post_item = db_helper.get_post(post_id_from_path)
         if not post_item:
             logger.error(f"Post item with postId '{post_id_from_path}' not found.")
@@ -95,12 +99,14 @@ def main(event, context):
         logger.info(f"WebsiteId validated: {website_id}")
 
         # --- 3. Fetch Website Settings using Helper ---
+        logger.info("--- 3. Fetch Website Settings using Helper ---")
         website_settings = db_helper.get_website_settings(website_id)
         if not website_settings:
             logger.error(f"Website settings for websiteId '{website_id}' not found.")
             return format_response(404, {"error": f"Website settings for websiteId '{website_id}' not found."})
 
         # --- 4. Call the Research Agent ---
+        logger.info("--- 4. Call the Research Agent ---")
         logger.info(f"Calling research agent for postId '{post_id_from_path}'...")
         raw_article_text = generate_research_draft(
             blog_title=blog_title,
@@ -109,6 +115,7 @@ def main(event, context):
         logger.info(f"Agent completed. Received text length: {len(raw_article_text)}")
 
         # --- 5. Save Agent Output using S3 Helper ---
+        logger.info("--- 5. Save Agent Output using S3 Helper ---")
         logger.info(f"Saving research article text to S3 for postId '{post_id_from_path}'...")
         s3_key = f"{website_id}/{post_id_from_path}/research_article.txt"
         s3_uri = s3_helper.save_text_file(
@@ -123,6 +130,7 @@ def main(event, context):
         logger.info(f"Article saved successfully to: {s3_uri}")
 
         # --- 6. Update Post Item using Helper ---
+        logger.info("--- 6. Update Post Item using Helper ---")
         logger.info(f"Updating post item '{post_id_from_path}' with researchArticleUri...")
         update_success = db_helper.update_post_research_uri(post_id_from_path, s3_uri)
 
@@ -134,8 +142,20 @@ def main(event, context):
                 "postId": post_id_from_path,
                 "researchArticleUri": s3_uri
             })
+        
+        status_updated = db_helper.update_post_status(post_id_from_path, "RESEARCH_COMPLETE")
+
+        if not status_updated:
+             logger.warning(f"Article generated and URI update attempted, but failed to update final status for {post_id_from_path}.")
+             # Still return success to user, but log clearly
+             return format_response(200, {
+                "message": "Research article generated but failed to update final post status.",
+                "postId": post_id_from_path,
+                "researchArticleUri": s3_uri
+            })
 
         # --- 7. Return Success Response ---
+        logger.info("--- 7. Return Success Response ---")
         logger.info(f"Post item '{post_id_from_path}' updated successfully with researchArticleUri: {s3_uri}.")
         return format_response(200, {
             "message": "Research article generated and post updated successfully.",
@@ -143,10 +163,16 @@ def main(event, context):
             "researchArticleUri": s3_uri
         })
 
-    except ValueError as ve: # Catch specific validation/config errors
-        logger.error(f"Value Error: {ve}")
-        return format_response(400, {"error": str(ve)})
     except Exception as e: # Catch unexpected errors
-        logger.error(f"Unhandled error processing request: {e}")
-        return format_response(500, {"error": "An unexpected error occurred."})
+        logger.error(f"Unhandled error processing request for postId '{post_id_from_path}', {e}")
+        # --- Attempt to update status to FAILED ---
+        if post_id_from_path and db_helper: # Check if we have ID and helper
+             logger.info(f"Attempting to update status to RESEARCH_FAILED for postId '{post_id_from_path}' due to error.")
+             db_helper.update_post_status(post_id_from_path, "RESEARCH_FAILED") # Best effort status update
+             
+        # Return error response to API Gateway
+        if isinstance(e, ValueError): # Handle known value errors distinctly
+             return format_response(400, {"error": str(e)})
+        else:
+             return format_response(500, {"error": "An unexpected error occurred."})
     

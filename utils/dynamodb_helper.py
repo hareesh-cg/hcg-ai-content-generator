@@ -2,6 +2,7 @@
 import os
 import boto3
 from botocore.exceptions import ClientError
+import time
 
 from utils.logger_config import get_logger
 
@@ -16,6 +17,7 @@ class DynamoDBHelper:
         self.settings_table_name = os.environ.get('SETTINGS_TABLE_NAME')
 
         if not self.posts_table_name or not self.settings_table_name:
+            logger.error("Missing DynamoDB table name environment variables")
             raise ValueError("Missing DynamoDB table name environment variables (POSTS_TABLE_NAME, SETTINGS_TABLE_NAME)")
 
         try:
@@ -40,8 +42,7 @@ class DynamoDBHelper:
             return item
         except ClientError as e:
             logger.error(f"DynamoDB Error getting post item '{post_id}': {e.response['Error']['Message']}")
-            # Depending on desired behavior, you might return None or raise an exception
-            return None # Returning None indicates not found or error
+            return None
 
     def get_website_settings(self, website_id: str) -> dict | None:
         """Gets an item from the WebsiteSettings table by websiteId."""
@@ -62,18 +63,48 @@ class DynamoDBHelper:
         """Updates the Posts table item with the researchArticleUri."""
         logger.info(f"Updating post item '{post_id}' with research URI: {research_uri}")
         try:
+            current_timestamp = int(time.time()) # Get current epoch timestamp as integer
+            
             self.posts_table.update_item(
                 Key={'postId': post_id},
-                UpdateExpression="SET researchArticleUri = :uri, updateTimestamp = :ts",
+                # Using SET is fine, it adds the attribute if it doesn't exist
+                UpdateExpression="SET researchArticleUri = :uri, updateTimestamp = :ts", 
                 ExpressionAttributeValues={
                     ':uri': research_uri,
-                    ':ts': boto3.dynamodb.types.NUMBER.Number(int(__import__('time').time())) # Add an update timestamp
+                    # Pass the Python integer directly:
+                    ':ts': current_timestamp 
                 },
-                ReturnValues="NONE" # Don't need updated attributes back
+                ReturnValues="NONE" 
             )
             logger.info("Post item updated successfully.")
             return True
+        except Exception as e:
+            logger.exception(f"Unexpected DynamoDB error updating post item '{post_id}'") # Log exception
+            return False
+        
+    def update_post_status(self, post_id: str, status: str) -> bool:
+        """
+        Updates the status and updateTimestamp for a post item.
+        """
+        logger.info(f"Updating status for post item '{post_id}' to: {status}")
+        try:
+            current_timestamp = int(time.time()) # Get current epoch timestamp as integer
+
+            self.posts_table.update_item(
+                Key={'postId': post_id},
+                UpdateExpression="SET postStatus = :s, updateTimestamp = :ts", # Use 'postStatus' or just 'status'
+                ExpressionAttributeValues={
+                    ':s': status,
+                    ':ts': current_timestamp
+                },
+                ReturnValues="NONE"
+            )
+            logger.info(f"Post item '{post_id}' status updated successfully.")
+            return True
         except ClientError as e:
-            logger.error(f"DynamoDB Error updating post item '{post_id}': {e.response['Error']['Message']}")
+            logger.exception(f"DynamoDB Error updating status for post item '{post_id}'")
+            return False
+        except Exception as e:
+            logger.exception(f"Unexpected error updating status for post item '{post_id}'")
             return False
         

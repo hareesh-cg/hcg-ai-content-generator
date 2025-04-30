@@ -99,6 +99,8 @@ jobs:
             --role ${{ secrets.AWS_EXECUTION_ROLE }} \
             --handler ${{ env.RESEARCH_LAMBDA_HANDLER }} \
             --environment "$ENV_VARS" \
+            --timeout 300 \
+            --memory-size 512 \
             --region ${{ env.AWS_REGION }}
           echo "Research Lambda configuration complete."
 
@@ -122,26 +124,20 @@ jobs:
           echo "Function update complete."
 
       - name: Configure Rewrite Lambda
-        env:
-          # Pass sensitive env vars needed for THIS function via secrets
-          OPENAI_API_KEY_SECRET: ${{ secrets.OPENAI_API_KEY }}
         run: |
           echo "Configuring Rewrite Lambda: ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }}"
           ENV_VARS="Variables={"
           ENV_VARS+="CONTENT_BUCKET_NAME=${{ env.CONTENT_BUCKET_NAME }},"
           ENV_VARS+="POSTS_TABLE_NAME=${{ env.POSTS_TABLE_NAME }},"
           ENV_VARS+="SETTINGS_TABLE_NAME=${{ env.SETTINGS_TABLE_NAME }},"
-          if [[ -n "${{ env.OPENAI_API_KEY_SECRET }}" ]]; then
-            echo "Adding OPENAI_API_KEY to environment variables."
-            ENV_VARS+=",OPENAI_API_KEY=${{ env.OPENAI_API_KEY_SECRET }}"
-          else
-            echo "Warning: OPENAI_API_KEY secret is empty or not set. Skipping."
-          fi
+          ENV_VARS+="OPENAI_API_KEY=${{ env.OPENAI_API_KEY_SECRET }}"
           ENV_VARS+="}"
           aws lambda update-function-configuration \
             --function-name ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }} \
             --role ${{ secrets.AWS_EXECUTION_ROLE }} \
             --handler ${{ env.REWRITE_LAMBDA_HANDLER }} \
             --environment "$ENV_VARS" \
+            --timeout 300 \
+            --memory-size 512 \
             --region ${{ env.AWS_REGION }}
           echo "Rewrite Lambda configuration complete."

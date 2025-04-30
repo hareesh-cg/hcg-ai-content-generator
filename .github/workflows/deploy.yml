@@ -60,6 +60,7 @@ jobs:
           echo "Copying application code..."
           cp -r lambda_handlers ./package/
           cp -r agents ./package/
+          cp -r utils ./package/
           echo "Creating deployment package..."
           cd package
           zip -r ../lambda-deployment-package.zip .

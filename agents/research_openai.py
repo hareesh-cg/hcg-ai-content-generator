@@ -75,10 +75,10 @@ def generate_research_draft(blog_title: str, website_settings: dict) -> str:
         )
         raw_article_content = response.choices[0].message.content
         if not raw_article_content:
-            logger.error("LLM returned empty content for title: %s", blog_title)
+            logger.error(f"LLM returned empty content for title: {blog_title}")
             raise ValueError("LLM returned empty content.")
 
-        logger.info("LLM response received. Content length:", len(raw_article_content))
+        logger.info(f"LLM response received. Content length: {len(raw_article_content)}")
 
         return raw_article_content
 

@@ -110,7 +110,7 @@ def rewrite_article(post_id: str, raw_article_uri: str, website_settings: dict, 
     if not refined_article_content:
          raise ValueError("LLM returned empty content after rewrite request.")
 
-    logger.info("LLM rewrite response received. Content length:", len(refined_article_content))
+    logger.info(f"LLM rewrite response received. Content length: {len(refined_article_content)}")
     # You might want to add a word count check here before saving
 
     # --- 4. Save Refined Article to S3 ---

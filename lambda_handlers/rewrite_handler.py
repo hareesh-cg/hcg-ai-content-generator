@@ -17,7 +17,7 @@ def main(event, context):
     AWS Lambda handler for the article rewrite step.
     Calls the rewrite agent.
     """
-    logger.info("Received event: %s", json.dumps(event, indent=2))
+    logger.info(f"Received event: {json.dumps(event, indent=2)}")
 
     if not bucket_name:
          logger.error("Error: CONTENT_BUCKET_NAME environment variable not set.")

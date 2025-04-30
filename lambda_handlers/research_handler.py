@@ -48,7 +48,7 @@ def main(event, context):
     API Gateway handler for triggering the research process.
     GET /research/website/{websiteId}/post/{postId}
     """
-    logger.info("Received API Gateway event: %s", json.dumps(event, indent=2))
+    logger.info(f"Received API Gateway event: {json.dumps(event, indent=2)}")
 
     # Check if initialization failed
     if not db_helper:
@@ -67,7 +67,7 @@ def main(event, context):
         post_id_from_path = path_params.get('postId')
 
         if not website_id_from_path or not post_id_from_path:
-            logger.warning("Missing path parameters in request.")
+            logger.error("Missing path parameters in request.")
             return format_response(400, {"error": "Missing websiteId or postId in path parameters."})
 
         logger.info(f"Extracted websiteId: {website_id_from_path}, postId: {post_id_from_path}")
@@ -148,7 +148,5 @@ def main(event, context):
         return format_response(400, {"error": str(ve)})
     except Exception as e: # Catch unexpected errors
         logger.error(f"Unhandled error processing request: {e}")
-        import traceback
-        traceback.print_exc() # Print full traceback to CloudWatch Logs
         return format_response(500, {"error": "An unexpected error occurred."})
     

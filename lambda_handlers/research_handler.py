@@ -3,14 +3,19 @@ import json
 import os
 from utils.dynamodb_helper import DynamoDBHelper # Import the new helper
 from agents.research_openai import generate_research_draft # Import the agent
+import logging
 
-print("Research Handler Lambda Initialized (API Gateway Trigger)")
+logger = logging.getLogger(__name__)
+log_level = os.environ.get('LOG_LEVEL', 'DEBUG').upper()
+logger.setLevel(log_level)
+
+logger.info("Research Handler Lambda Initialized (API Gateway Trigger)")
 
 # Initialize helper outside handler (can raise error on cold start if config missing)
 try:
     db_helper = DynamoDBHelper()
 except ValueError as e:
-    print(f"CRITICAL INIT ERROR: {e}")
+    logger.error(f"CRITICAL INIT ERROR: {e}")
     db_helper = None # Ensure handler fails cleanly if init fails
 
 # Get bucket name from environment variable once
@@ -35,13 +40,13 @@ def main(event, context):
     API Gateway handler for triggering the research process.
     GET /research/website/{websiteId}/post/{postId}
     """
-    print("Received API Gateway event:", json.dumps(event, indent=2))
+    logger.info("Received API Gateway event:", json.dumps(event, indent=2))
 
     # Check if initialization failed
     if not db_helper:
         return format_response(500, {"error": "Internal server configuration error (DB Helper)."})
     if not bucket_name:
-        print("Error: CONTENT_BUCKET_NAME environment variable not set.")
+        logger.error("Error: CONTENT_BUCKET_NAME environment variable not set.")
         return format_response(500, {"error": "Internal server configuration error (Bucket Name)."})
 
     try:
@@ -53,7 +58,7 @@ def main(event, context):
         if not website_id_from_path or not post_id_from_path:
             return format_response(400, {"error": "Missing websiteId or postId in path parameters."})
 
-        print(f"Extracted websiteId: {website_id_from_path}, postId: {post_id_from_path}")
+        logger.info(f"Extracted websiteId: {website_id_from_path}, postId: {post_id_from_path}")
 
         # --- 2. Fetch Post & Validate Website ID using Helper ---
         post_item = db_helper.get_post(post_id_from_path)
@@ -68,11 +73,11 @@ def main(event, context):
         if not blog_title:
              return format_response(500, {"error": f"Post item '{post_id_from_path}' is missing blogTitle attribute."})
         if website_id_from_path != website_id_from_db:
-            print(f"Forbidden: Path websiteId '{website_id_from_path}' does not match item's websiteId '{website_id_from_db}'")
+            logger.warning(f"Forbidden: Path websiteId '{website_id_from_path}' does not match item's websiteId '{website_id_from_db}'")
             return format_response(403, {"error": "Access denied: Website ID mismatch."})
 
         website_id = website_id_from_db # Use validated ID
-        print(f"WebsiteId validated: {website_id}")
+        logger.info(f"WebsiteId validated: {website_id}")
 
         # --- 3. Fetch Website Settings using Helper ---
         website_settings = db_helper.get_website_settings(website_id)
@@ -80,7 +85,7 @@ def main(event, context):
             return format_response(404, {"error": f"Website settings for websiteId '{website_id}' not found."})
 
         # --- 4. Call the Research Agent ---
-        print(f"Calling research agent for postId '{post_id_from_path}'...")
+        logger.info(f"Calling research agent for postId '{post_id_from_path}'...")
         s3_uri = generate_research_draft(
             post_id=post_id_from_path,
             blog_title=blog_title,
@@ -88,15 +93,15 @@ def main(event, context):
             website_settings=website_settings,
             bucket_name=bucket_name
         )
-        print(f"Agent completed. Research article URI: {s3_uri}")
+        logger.info(f"Agent completed. Research article URI: {s3_uri}")
 
         # --- 5. Update Post Item using Helper ---
-        print(f"Updating post item '{post_id_from_path}' with researchArticleUri...")
+        logger.info(f"Updating post item '{post_id_from_path}' with researchArticleUri...")
         update_success = db_helper.update_post_research_uri(post_id_from_path, s3_uri)
 
         if not update_success:
             # Log the error but return success as the main task completed
-            print(f"Warning: Article generated but failed to update post status for {post_id_from_path}.")
+            logger.warning(f"Warning: Article generated but failed to update post status for {post_id_from_path}.")
             return format_response(200, {
                 "message": "Research article generated but failed to update post status in DynamoDB.",
                 "postId": post_id_from_path,
@@ -111,10 +116,10 @@ def main(event, context):
         })
 
     except ValueError as ve: # Catch specific validation/config errors
-        print(f"Value Error: {ve}")
+        logger.error(f"Value Error: {ve}")
         return format_response(400, {"error": str(ve)})
     except Exception as e: # Catch unexpected errors
-        print(f"Unhandled error processing request: {e}")
+        logger.error(f"Unhandled error processing request: {e}")
         import traceback
         traceback.print_exc() # Print full traceback to CloudWatch Logs
         return format_response(500, {"error": "An unexpected error occurred."})

@@ -1,6 +1,11 @@
 import os
 import boto3
 from openai import OpenAI # Or your chosen LLM client library
+import logging
+
+logger = logging.getLogger(__name__)
+log_level = os.environ.get('LOG_LEVEL', 'DEBUG').upper()
+logger.setLevel(log_level)
 
 # Initialize clients (can still be global in this module if desired)
 s3_client = boto3.client('s3')
@@ -10,7 +15,7 @@ try:
          raise ValueError("OPENAI_API_KEY environment variable not set or invalid")
     llm_client = OpenAI(api_key=api_key)
 except Exception as e:
-    print(f"Error initializing LLM client: {e}")
+    logger.error(f"Error initializing LLM client: {e}")
     llm_client = None
 
 def generate_research_draft(post_id: str, blog_title: str, website_settings: dict, bucket_name: str) -> str:
@@ -37,7 +42,7 @@ def generate_research_draft(post_id: str, blog_title: str, website_settings: dic
     if not all([post_id, blog_title]):
         raise ValueError("Missing required input: postId or blogTitle")
 
-    print(f"Generating research draft for Post ID: {post_id}, Title: {blog_title}")
+    logger.info(f"Generating research draft for Post ID: {post_id}, Title: {blog_title}")
 
     # Extract context from settings
     website_desc = website_settings.get('websiteDescription', '')
@@ -62,7 +67,7 @@ def generate_research_draft(post_id: str, blog_title: str, website_settings: dic
     - Do **NOT** include placeholder text like "[Insert details here]". Generate the full content.
     - Output only the researched article content itself, starting with the title. Do not include introductory or concluding remarks about the generation process itself.
     """
-    print("Constructed Prompt - sending to LLM...")
+    logger.info("Constructed Prompt - sending to LLM...")
 
     # Call LLM API
     response = llm_client.chat.completions.create(
@@ -77,18 +82,18 @@ def generate_research_draft(post_id: str, blog_title: str, website_settings: dic
     if not raw_article_content:
          raise ValueError("LLM returned empty content.")
 
-    print("LLM response received. Content length:", len(raw_article_content))
+    logger.info("LLM response received. Content length:", len(raw_article_content))
 
     # Save Raw Article to S3
     s3_key = f"posts/{post_id}/raw_article.txt"
-    print(f"Uploading raw article to s3://{bucket_name}/{s3_key}")
+    logger.info(f"Uploading raw article to s3://{bucket_name}/{s3_key}")
     s3_client.put_object(
         Bucket=bucket_name,
         Key=s3_key,
         Body=raw_article_content.encode('utf-8'),
         ContentType='text/plain'
     )
-    print("Upload successful.")
+    logger.info("Upload successful.")
 
     s3_uri = f"s3://{bucket_name}/{s3_key}"
     return s3_uri

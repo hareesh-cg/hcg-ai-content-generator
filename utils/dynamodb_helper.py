@@ -2,6 +2,11 @@
 import os
 import boto3
 from botocore.exceptions import ClientError
+import logging
+
+logger = logging.getLogger(__name__)
+log_level = os.environ.get('LOG_LEVEL', 'DEBUG').upper()
+logger.setLevel(log_level)
 
 class DynamoDBHelper:
     """Handles interactions with DynamoDB tables."""
@@ -18,45 +23,45 @@ class DynamoDBHelper:
             dynamodb_resource = boto3.resource('dynamodb')
             self.posts_table = dynamodb_resource.Table(self.posts_table_name)
             self.settings_table = dynamodb_resource.Table(self.settings_table_name)
-            print(f"DynamoDBHelper initialized for tables: {self.posts_table_name}, {self.settings_table_name}")
+            logger.info(f"DynamoDBHelper initialized for tables: {self.posts_table_name}, {self.settings_table_name}")
         except Exception as e:
-            print(f"Error initializing DynamoDB resources: {e}")
+            logger.error(f"Error initializing DynamoDB resources: {e}")
             raise ValueError("Failed to initialize DynamoDB table resources") from e
 
     def get_post(self, post_id: str) -> dict | None:
         """Gets an item from the Posts table by postId."""
-        print(f"Getting post item with postId: {post_id}")
+        logger.info(f"Getting post item with postId: {post_id}")
         try:
             response = self.posts_table.get_item(Key={'postId': post_id})
             item = response.get('Item')
             if item:
-                print("Post item found.")
+                logger.debug("Post item found.")
             else:
-                print("Post item not found.")
+                logger.debug("Post item not found.")
             return item
         except ClientError as e:
-            print(f"DynamoDB Error getting post item '{post_id}': {e.response['Error']['Message']}")
+            logger.error(f"DynamoDB Error getting post item '{post_id}': {e.response['Error']['Message']}")
             # Depending on desired behavior, you might return None or raise an exception
             return None # Returning None indicates not found or error
 
     def get_website_settings(self, website_id: str) -> dict | None:
         """Gets an item from the WebsiteSettings table by websiteId."""
-        print(f"Getting website settings with websiteId: {website_id}")
+        logger.info(f"Getting website settings with websiteId: {website_id}")
         try:
             response = self.settings_table.get_item(Key={'websiteId': website_id})
             item = response.get('Item')
             if item:
-                print("Website settings found.")
+                logger.debug("Website settings found.")
             else:
-                print("Website settings not found.")
+                logger.debug("Website settings not found.")
             return item
         except ClientError as e:
-            print(f"DynamoDB Error getting settings item '{website_id}': {e.response['Error']['Message']}")
+            logger.error(f"DynamoDB Error getting settings item '{website_id}': {e.response['Error']['Message']}")
             return None
 
     def update_post_research_uri(self, post_id: str, research_uri: str) -> bool:
         """Updates the Posts table item with the researchArticleUri."""
-        print(f"Updating post item '{post_id}' with research URI: {research_uri}")
+        logger.info(f"Updating post item '{post_id}' with research URI: {research_uri}")
         try:
             self.posts_table.update_item(
                 Key={'postId': post_id},
@@ -67,8 +72,8 @@ class DynamoDBHelper:
                 },
                 ReturnValues="NONE" # Don't need updated attributes back
             )
-            print("Post item updated successfully.")
+            logger.info("Post item updated successfully.")
             return True
         except ClientError as e:
-            print(f"DynamoDB Error updating post item '{post_id}': {e.response['Error']['Message']}")
+            logger.error(f"DynamoDB Error updating post item '{post_id}': {e.response['Error']['Message']}")
             return False

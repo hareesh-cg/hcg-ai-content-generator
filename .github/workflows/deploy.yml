@@ -77,6 +77,14 @@ jobs:
             --publish || echo "Code deployment failed for Research Lambda, proceeding..." 
           echo "Research Lambda deployment complete."
 
+      - name: Wait for Research Lambda update to complete
+        run: |
+          echo "Waiting for function update to complete..."
+          aws lambda wait function-updated \
+            --function-name ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }}
+          echo "Function update complete."
+
       - name: Configure Research Lambda
         run: |
           echo "Configuring Research Lambda: ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }}"
@@ -104,6 +112,14 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --publish || echo "Code deployment failed for Rewrite Lambda, proceeding..."
           echo "Rewrite Lambda deployment complete."
+
+      - name: Wait for Research Lambda update to complete
+        run: |
+          echo "Waiting for function update to complete..."
+          aws lambda wait function-updated \
+            --function-name ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }}
+          echo "Function update complete."
 
       - name: Configure Rewrite Lambda
         env:

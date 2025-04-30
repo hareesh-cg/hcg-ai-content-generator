@@ -1,4 +1,4 @@
-name: Deploy CDK Stack
+name: Deploy and Configure Lambda Functions
 
 on:
   push:
@@ -12,8 +12,8 @@ permissions:
 
 env:
   AWS_REGION: "us-east-1"
-  RESEARCH_LAMBDA_FUNCTION_NAME: "HcgResearchLambda"
-  REWRITE_LAMBDA_FUNCTION_NAME: "HcgRewriteLambda"
+  RESEARCH_LAMBDA_FUNCTION_NAME: "HcgBlogContent-Research"
+  REWRITE_LAMBDA_FUNCTION_NAME: "HcgBlogContent-Rewrite"
 
   RESEARCH_LAMBDA_HANDLER: "lambda_handlers.research_handler.main"
   REWRITE_LAMBDA_HANDLER: "lambda_handlers.rewrite_handler.main"

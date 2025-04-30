@@ -17,13 +17,14 @@ except Exception as e:
     logger.error(f"Error initializing LLM client: {e}")
     llm_client = None
 
-def generate_research_draft(post_id: str, blog_title: str, website_settings: dict, bucket_name: str) -> str:
+def generate_research_draft(post_id: str, blog_title: str, website_id: str, website_settings: dict, bucket_name: str) -> str:
     """
     Generates the research draft using OpenAI and saves it to S3.
 
     Args:
         post_id: The ID of the post.
         blog_title: The title of the blog post.
+        website_id: The ID of the website (for S3 path).
         website_settings: Dictionary containing website context.
         bucket_name: The name of the S3 bucket to save the draft.
 
@@ -35,10 +36,13 @@ def generate_research_draft(post_id: str, blog_title: str, website_settings: dic
         Exception: For S3 or other unexpected errors.
     """
     if not llm_client:
+        logger.error("LLM Client not initialized during function call.")
         raise ValueError("LLM Client not initialized.")
     if not bucket_name:
+         logger.error("S3 Bucket name environment variable not configured.")
          raise ValueError("S3 Bucket name environment variable not configured.")
     if not all([post_id, blog_title]):
+        logger.error("Missing required input (postId, blogTitle, or websiteId).")
         raise ValueError("Missing required input: postId or blogTitle")
 
     logger.info(f"Generating research draft for Post ID: {post_id}, Title: {blog_title}")
@@ -68,31 +72,26 @@ def generate_research_draft(post_id: str, blog_title: str, website_settings: dic
     """
     logger.info("Constructed Prompt - sending to LLM...")
 
-    # Call LLM API
-    response = llm_client.chat.completions.create(
-        model="gpt-4o", # Or your chosen model
-        messages=[
-            {"role": "system", "content": "You are an expert researcher and technical writer."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0.7,
-    )
-    raw_article_content = response.choices[0].message.content
-    if not raw_article_content:
-         raise ValueError("LLM returned empty content.")
+    try:
+        # Call LLM API
+        response = llm_client.chat.completions.create(
+            model="gpt-4o", # Or your chosen model
+            messages=[
+                {"role": "system", "content": "You are an expert researcher and technical writer."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+        )
+        raw_article_content = response.choices[0].message.content
+        if not raw_article_content:
+            logger.error("LLM returned empty content for postId: %s", post_id)
+            raise ValueError("LLM returned empty content.")
 
-    logger.info("LLM response received. Content length:", len(raw_article_content))
+        logger.info("LLM response received. Content length:", len(raw_article_content))
 
-    # Save Raw Article to S3
-    s3_key = f"posts/{post_id}/raw_article.txt"
-    logger.info(f"Uploading raw article to s3://{bucket_name}/{s3_key}")
-    s3_client.put_object(
-        Bucket=bucket_name,
-        Key=s3_key,
-        Body=raw_article_content.encode('utf-8'),
-        ContentType='text/plain'
-    )
-    logger.info("Upload successful.")
+        return raw_article_content
 
-    s3_uri = f"s3://{bucket_name}/{s3_key}"
-    return s3_uri
+    except Exception as e:
+        logger.exception(f"An error occurred during research draft generation for postId {post_id}")
+        raise
+    

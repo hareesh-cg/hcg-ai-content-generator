@@ -5,7 +5,7 @@ import sys # To potentially write initial warnings to stderr
 # Flag to ensure setup runs only once per Lambda container lifecycle
 _logging_configured = False
 
-DEFAULT_LOG_LEVEL = "DEBUG"
+DEFAULT_LOG_LEVEL = "INFO"
 VALID_LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 
 def setup_logging():

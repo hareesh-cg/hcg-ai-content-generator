@@ -76,3 +76,4 @@ class DynamoDBHelper:
         except ClientError as e:
             logger.error(f"DynamoDB Error updating post item '{post_id}': {e.response['Error']['Message']}")
             return False
+        

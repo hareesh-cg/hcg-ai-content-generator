@@ -88,12 +88,12 @@ jobs:
       - name: Configure Research Lambda
         run: |
           echo "Configuring Research Lambda: ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }}"
-          ENV_VARS="Variables={
-            CONTENT_BUCKET_NAME=${{ env.CONTENT_BUCKET_NAME }},
-            POSTS_TABLE_NAME=${{ env.POSTS_TABLE_NAME }},
-            SETTINGS_TABLE_NAME=${{ env.SETTINGS_TABLE_NAME }},
-            OPENAI_API_KEY=${{ env.OPENAI_API_KEY_SECRET }}
-          }"
+          ENV_VARS="Variables={"
+          ENV_VARS+="CONTENT_BUCKET_NAME=${{ env.CONTENT_BUCKET_NAME }},"
+          ENV_VARS+="POSTS_TABLE_NAME=${{ env.POSTS_TABLE_NAME }},"
+          ENV_VARS+="SETTINGS_TABLE_NAME=${{ env.SETTINGS_TABLE_NAME }},"
+          ENV_VARS+="OPENAI_API_KEY=${{ env.OPENAI_API_KEY_SECRET }}"
+          ENV_VARS+="}"
           aws lambda update-function-configuration \
             --function-name ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }} \
             --role ${{ secrets.AWS_EXECUTION_ROLE }} \
@@ -127,12 +127,12 @@ jobs:
           OPENAI_API_KEY_SECRET: ${{ secrets.OPENAI_API_KEY }}
         run: |
           echo "Configuring Rewrite Lambda: ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }}"
-          ENV_VARS="Variables={
-            CONTENT_BUCKET_NAME=${{ env.CONTENT_BUCKET_NAME }},
-            POSTS_TABLE_NAME=${{ env.POSTS_TABLE_NAME }},
-            SETTINGS_TABLE_NAME=${{ env.SETTINGS_TABLE_NAME }},
-            OPENAI_API_KEY=${{ env.OPENAI_API_KEY_SECRET }}
-          }"
+          ENV_VARS="Variables={"
+          ENV_VARS+="CONTENT_BUCKET_NAME=${{ env.CONTENT_BUCKET_NAME }},"
+          ENV_VARS+="POSTS_TABLE_NAME=${{ env.POSTS_TABLE_NAME }},"
+          ENV_VARS+="SETTINGS_TABLE_NAME=${{ env.SETTINGS_TABLE_NAME }},"
+          ENV_VARS+="OPENAI_API_KEY=${{ env.OPENAI_API_KEY_SECRET }}"
+          ENV_VARS+="}"
           aws lambda update-function-configuration \
             --function-name ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }} \
             --role ${{ secrets.AWS_EXECUTION_ROLE }} \

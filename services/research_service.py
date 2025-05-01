@@ -87,12 +87,10 @@ class ResearchService:
 
             # --- 5. Save Output to S3 ---
             logger.info("--- 5. Save Output to S3 ---")
-            logger.info(f"Saving research article text to S3...")
-            s3_uri = self.s3_helper.save_research_article( # Use specific method in helper
-                website_id=website_id,
-                post_id=post_id,
-                article_content=raw_article_text
-            )
+            s3_key = f"{website_id}/{post_id}/research_article.txt"
+            logger.info(f"Saving research article text to S3 - {s3_key}")
+            s3_uri = self.s3_helper.save_text_file(key=s3_key, content=raw_article_text)
+
             if not s3_uri:
                 raise ServiceError("Failed to save generated article to S3.", 500, service_name=SERVICE_NAME)
             logger.info(f"Article saved successfully to: {s3_uri}")

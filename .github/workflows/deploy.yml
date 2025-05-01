@@ -12,11 +12,9 @@ permissions:
 
 env:
   AWS_REGION: "us-east-1"
-  RESEARCH_LAMBDA_FUNCTION_NAME: "HcgBlogContent-Research"
-  REWRITE_LAMBDA_FUNCTION_NAME: "HcgBlogContent-Rewrite"
-
-  RESEARCH_LAMBDA_HANDLER: "lambda_handlers.research_handler.main"
-  REWRITE_LAMBDA_HANDLER: "lambda_handlers.rewrite_handler.main"
+  
+  API_HANDLER_LAMBDA_FUNCTION_NAME: "HcgBlogContent-ApiHandler"
+  API_HANDLER_LAMBDA_HANDLER: "lambda_handlers.api_handler.main"
 
   CONTENT_BUCKET_NAME: "hcg-blog-content"
   POSTS_TABLE_NAME: "HcgBlogContent-Posts"
@@ -68,28 +66,28 @@ jobs:
           cd ..
           echo "Deployment package created: lambda-deployment-package.zip"
 
-        # The runtime handler (e.g., lambda_handlers.research_handler.main) must be set manually in AWS.
-      - name: Deploy Research Lambda
+        # The runtime handler (e.g., lambda_handlers.api_handler.main) must be set manually in AWS.
+      - name: Deploy API Handler Lambda Code
         run: |
-          echo "Deploying code package to Research Lambda: ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }}"
+          echo "Deploying code package to API Handler Lambda: ${{ env.API_HANDLER_LAMBDA_FUNCTION_NAME }}"
           aws lambda update-function-code \
-            --function-name ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }} \
+            --function-name ${{ env.API_HANDLER_LAMBDA_FUNCTION_NAME }} \
             --zip-file fileb://lambda-deployment-package.zip \
             --region ${{ env.AWS_REGION }} \
-            --publish || echo "Code deployment failed for Research Lambda, proceeding..." 
-          echo "Research Lambda deployment complete."
+            --publish || echo "Code deployment failed for API Handler Lambda, proceeding..." 
+          echo "API Handler Lambda deployment complete."
 
-      - name: Wait for Research Lambda update to complete
+      - name: Wait for API Handler Lambda update to complete
         run: |
           echo "Waiting for function update to complete..."
           aws lambda wait function-updated \
-            --function-name ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }} \
+            --function-name ${{ env.API_HANDLER_LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }}
           echo "Function update complete."
 
-      - name: Configure Research Lambda
+      - name: Configure API Handler Lambda
         run: |
-          echo "Configuring Research Lambda: ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }}"
+          echo "Configuring API Handler Lambda: ${{ env.API_HANDLER_LAMBDA_FUNCTION_NAME }}"
           ENV_VARS="Variables={"
           ENV_VARS+="CONTENT_BUCKET_NAME=${{ env.CONTENT_BUCKET_NAME }},"
           ENV_VARS+="POSTS_TABLE_NAME=${{ env.POSTS_TABLE_NAME }},"
@@ -97,49 +95,11 @@ jobs:
           ENV_VARS+="OPENAI_API_KEY=${{ env.OPENAI_API_KEY_SECRET }}"
           ENV_VARS+="}"
           aws lambda update-function-configuration \
-            --function-name ${{ env.RESEARCH_LAMBDA_FUNCTION_NAME }} \
+            --function-name ${{ env.API_HANDLER_LAMBDA_FUNCTION_NAME }} \
             --role ${{ secrets.AWS_EXECUTION_ROLE }} \
-            --handler ${{ env.RESEARCH_LAMBDA_HANDLER }} \
+            --handler ${{ env.API_HANDLER_LAMBDA_HANDLER }} \
             --environment "$ENV_VARS" \
             --timeout 300 \
             --memory-size 512 \
             --region ${{ env.AWS_REGION }}
-          echo "Research Lambda configuration complete."
-
-        # The runtime handler (e.g., lambda_handlers.rewrite_handler.main) must be set manually in AWS.
-      - name: Deploy Rewrite Lambda        
-        run: |
-          echo "Deploying code package to Rewrite Lambda: ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }}"
-          aws lambda update-function-code \
-            --function-name ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }} \
-            --zip-file fileb://lambda-deployment-package.zip \
-            --region ${{ env.AWS_REGION }} \
-            --publish || echo "Code deployment failed for Rewrite Lambda, proceeding..."
-          echo "Rewrite Lambda deployment complete."
-
-      - name: Wait for Research Lambda update to complete
-        run: |
-          echo "Waiting for function update to complete..."
-          aws lambda wait function-updated \
-            --function-name ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }}
-          echo "Function update complete."
-
-      - name: Configure Rewrite Lambda
-        run: |
-          echo "Configuring Rewrite Lambda: ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }}"
-          ENV_VARS="Variables={"
-          ENV_VARS+="CONTENT_BUCKET_NAME=${{ env.CONTENT_BUCKET_NAME }},"
-          ENV_VARS+="POSTS_TABLE_NAME=${{ env.POSTS_TABLE_NAME }},"
-          ENV_VARS+="SETTINGS_TABLE_NAME=${{ env.SETTINGS_TABLE_NAME }},"
-          ENV_VARS+="OPENAI_API_KEY=${{ env.OPENAI_API_KEY_SECRET }}"
-          ENV_VARS+="}"
-          aws lambda update-function-configuration \
-            --function-name ${{ env.REWRITE_LAMBDA_FUNCTION_NAME }} \
-            --role ${{ secrets.AWS_EXECUTION_ROLE }} \
-            --handler ${{ env.REWRITE_LAMBDA_HANDLER }} \
-            --environment "$ENV_VARS" \
-            --timeout 300 \
-            --memory-size 512 \
-            --region ${{ env.AWS_REGION }}
-          echo "Rewrite Lambda configuration complete."
+          echo "API Handler Lambda configuration complete."

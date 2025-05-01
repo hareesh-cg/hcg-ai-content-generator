@@ -1,131 +1,64 @@
 import os
 from utils.logger_config import get_logger
-from utils.dynamodb_helper import DynamoDBHelper
+# Import base class, helpers, errors
+from services.base_service import BaseContentService 
+from utils.dynamodb_helper import DynamoDBHelper # Still need constants
 from utils.s3_helper import S3Helper
-from utils.errors import ServiceError
-
-from agents.research_openai import generate_research_draft as generate_openai_draft
-# from agents.research_gemini import generate_research_draft as generate_gemini_draft # Example
+from utils.errors import ServiceError 
+# Import the specific agent implementation
+from agents.research_openai import generate_research_draft as generate_openai_draft 
 
 logger = get_logger(__name__)
 SERVICE_NAME = "ResearchService"
 
-class ResearchService:
+class ResearchService(BaseContentService): # Inherit from base
     """Orchestrates the research article generation process."""
 
     def __init__(self):
-        """Initializes dependencies (helpers)."""
-        logger.info("Initializing ResearchService...")
-        try:
-            self.db_helper = DynamoDBHelper()
-            self.s3_helper = S3Helper()
-            logger.info("ResearchService initialized successfully.")
-        except ValueError as e:
-            # If helpers fail to init (e.g., missing env vars), service cannot operate
-            logger.exception("Failed to initialize helpers in ResearchService.")
-            raise ServiceError("Service initialization failed.", 500, service_name=SERVICE_NAME) from e
+        # Initialize the base class, passing the service name
+        super().__init__(service_name=SERVICE_NAME)
 
-    def _select_agent(self, website_settings: dict):
-        """Selects the appropriate agent based on config (future enhancement)."""
-        # TODO: Implement logic to choose agent based on website_settings or global config
-        # For now, default to OpenAI
-        logger.info("Selecting OpenAI agent for research.")
-        return generate_openai_draft
+    # --- Implement Abstract Properties ---
+    @property
+    def status_prefix(self) -> str:
+        return "RESEARCH"
 
-    def process_research_request(self, website_id: str, post_id: str) -> dict:
-        """Handles the end-to-end research process for a given post."""
-        final_status = "RESEARCH_FAILED" # Default status if error occurs early
-        try:
-            logger.info(f"Starting research process for websiteId: {website_id}, postId: {post_id}")
+    @property
+    def output_uri_db_key(self) -> str:
+        # The DynamoDB attribute name for this service's output URI
+        return DynamoDBHelper.RESEARCH_ARTICLE_URI
 
-            # --- 1. Update Status: STARTED ---
-            logger.info("--- 1. Update Status: STARTED ---")
+    # --- Implement Abstract Methods ---
 
-            update_success = self.db_helper.update_post_item(post_id, {DynamoDBHelper.POST_STATUS: 'RESEARCH_STARTED'})
-            if not update_success:
-                 logger.warning(f"Failed to update status to STARTED for postId {post_id}. Continuing...")
-                 # Decide if this is critical enough to stop
+    def _select_agent(self, website_settings: dict, post_item: dict | None = None, previous_step_output: any = None) -> callable:
+        """Selects the research agent."""
+        # TODO: Add logic if multiple research agents exist (e.g., check settings)
+        logger.info(f"[{self.service_name}] Selecting OpenAI agent.")
+        return generate_openai_draft # Return the function object
 
-            # --- 2. Fetch Post & Validate Website ID ---
-            logger.info("--- 2. Fetch Post & Validate Website ID ---")
-
-            post_item = self.db_helper.get_post(post_id)
-            if not post_item:
-                raise ServiceError(f"Post with postId '{post_id}' not found.", 404, service_name=SERVICE_NAME)
-
-            website_id_from_db = post_item.get(DynamoDBHelper.WEBSITE_ID)
-            blog_title = post_item.get(DynamoDBHelper.BLOG_TITLE)
-
-            if not website_id_from_db:
-                raise ServiceError(f"Post item '{post_id}' is missing websiteId attribute.", 500, service_name=SERVICE_NAME)
-            if not blog_title:
-                raise ServiceError(f"Post item '{post_id}' is missing blogTitle attribute.", 500, service_name=SERVICE_NAME)
-            # Validate against the ID from the request (which came from query param)
-            if website_id != website_id_from_db:
-                logger.error(f"Forbidden: Query websiteId '{website_id}' != DB websiteId '{website_id_from_db}' for postId '{post_id}'")
-                raise ServiceError("Access denied: Website ID mismatch.", 403, service_name=SERVICE_NAME)
-
-            logger.info(f"Post data fetched and validated for postId: {post_id}")
-
-            # --- 3. Fetch Website Settings ---
-            logger.info("--- 3. Fetch Website Settings ---")
-
-            website_settings = self.db_helper.get_website_settings(website_id)
-            if not website_settings:
-                raise ServiceError(f"Website settings for websiteId '{website_id}' not found.", 404, service_name=SERVICE_NAME)
-            logger.info(f"Website settings fetched for websiteId: {website_id}")
-
-            # --- 4. Select and Call Agent ---
-            logger.info("--- 4. Select and Call Agent ---")
-
-            research_agent_func = self._select_agent(website_settings)
-            logger.info(f"Calling agent function {research_agent_func.__name__}...")
-            raw_article_text = research_agent_func( # Agent only needs content generation context
-                blog_title=blog_title,
-                website_settings=website_settings
-            )
-            if not raw_article_text: # Agent should raise error, but double-check
-                 raise ServiceError("Agent returned empty content.", 500, service_name=SERVICE_NAME)
-            logger.info(f"Agent returned content. Length: {len(raw_article_text)}")
-
-            # --- 5. Save Output to S3 ---
-            logger.info("--- 5. Save Output to S3 ---")
-
-            s3_key = f"{website_id}/{post_id}/research_article.txt"
-            logger.info(f"Saving research article text to S3 - {s3_key}")
-            s3_uri = self.s3_helper.save_text_file(key=s3_key, content=raw_article_text)
-
-            if not s3_uri:
-                raise ServiceError("Failed to save generated article to S3.", 500, service_name=SERVICE_NAME)
-            logger.info(f"Article saved successfully to: {s3_uri}")
-
-            # --- 6. Update Post Item URI ---
-            logger.info("--- 6. Update Post Item URI ---")
+    def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, previous_step_output: any = None) -> any:
+        """Calls the research agent."""
+        blog_title = post_item.get(DynamoDBHelper.BLOG_TITLE)
+        if not blog_title:
+            raise ServiceError(f"Missing '{DynamoDBHelper.BLOG_TITLE}' in post item.", 500, service_name=self.service_name)
             
-            logger.info(f"Updating post item '{post_id}' with researchArticleUri - {s3_uri}")
-            final_status = "RESEARCH_COMPLETE"
-            update_success = self.db_helper.update_post_item(post_id, {DynamoDBHelper.RESEARCH_ARTICLE_URI: s3_uri, DynamoDBHelper.POST_STATUS: final_status})
-            if not update_success:
-                 logger.warning(f"Article processed, but failed to update final status, uri for {post_id}.")
-                 # Still return success, but maybe indicate partial success in message?
+        # Call the selected agent function (which is generate_openai_draft in this case)
+        return agent_function(
+            blog_title=blog_title,
+            website_settings=website_settings
+        )
 
-            # --- 7. Prepare Success Result ---
-            logger.info("--- 7. Prepare Success Result ---")
-            logger.info(f"Successfully processed request for postId: {post_id}")
-            return {
-                "message": "Research article generated, saved, and post updated successfully." if update_success else "Research article generated and saved; post update may have failed.",
-                "postId": post_id,
-                "researchArticleUri": s3_uri
-            }
+    def _save_agent_output(self, website_id: str, post_id: str, agent_output: any) -> str | None:
+        """Saves the research agent's text output."""
+        if not isinstance(agent_output, str):
+             logger.error(f"[{self.service_name}] Agent output was not a string, cannot save.")
+             return None # Or raise error
 
-        except Exception as e:
-            logger.exception(f"Error during research process for postId {post_id}")
-            # Attempt to set failed status if possible
-            if post_id: # Check if we have post_id
-                logger.info(f"Attempting to update status to {final_status} for postId '{post_id}' due to error.")
-                self.db_helper.update_post_item(post_id, {DynamoDBHelper.POST_STATUS: final_status})
-            # Re-raise original or custom error for handler
-            if isinstance(e, ServiceError):
-                raise # Re-raise specific service errors
-            else:
-                raise ServiceError("An unexpected error occurred during research processing.", 500, service_name=SERVICE_NAME) from e
+        # Construct the specific S3 key for the research article
+        s3_key = f"{website_id}/{post_id}/research_article.txt" 
+        
+        # Call the generic save_text_file method in the helper
+        return self.s3_helper.save_text_file( 
+            key=s3_key,
+            content=agent_output # agent_output is the raw article text string
+        )

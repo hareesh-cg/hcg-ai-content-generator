@@ -58,8 +58,9 @@ jobs:
             echo "lambda_handlers/requirements.txt not found, skipping dependency installation."
           fi
           echo "Copying application code..."
-          cp -r lambda_handlers ./package/
           cp -r agents ./package/
+          cp -r lambda_handlers ./package/
+          cp -r services ./package/
           cp -r utils ./package/
           echo "Creating deployment package..."
           cd package

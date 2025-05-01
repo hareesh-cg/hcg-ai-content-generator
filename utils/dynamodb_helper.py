@@ -1,4 +1,3 @@
-# D:\Projects\Python\hcg-ai-content-generator\utils\dynamodb_helper.py
 import os
 import boto3
 from botocore.exceptions import ClientError

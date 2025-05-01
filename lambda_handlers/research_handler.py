@@ -1,33 +1,17 @@
-# D:\Projects\Python\hcg-ai-content-generator\lambda_handlers\research_handler.py
 import json
 import os
 
-from utils.dynamodb_helper import DynamoDBHelper # Import the new helper
-from utils.s3_helper import S3Helper
-
 from agents.research_openai import generate_research_draft # Import the agent
 
+from services.research_service import ResearchService
+
 from utils.logger_config import setup_logging, get_logger
+from utils.errors import ServiceError
 
 setup_logging() # Configure root logger based on ENV var
 logger = get_logger(__name__)
 
 logger.info("Research Handler Lambda Initialized (API Gateway Trigger)")
-
-# Initialize helper outside handler (can raise error on cold start if config missing)
-try:
-    db_helper = DynamoDBHelper()
-    s3_helper = S3Helper()
-except ValueError as e:
-    logger.critical(f"CRITICAL INIT ERROR: {e}")
-    db_helper = None
-    s3_helper = None
-    # Ensure handler fails cleanly if init fails
-
-# Get bucket name from environment variable once
-bucket_name = os.environ.get('CONTENT_BUCKET_NAME')
-
-logger.info("Handler Initialized.")
 
 # --- Helper Function for API Gateway Response ---
 def format_response(status_code, body_dict):
@@ -46,133 +30,38 @@ def format_response(status_code, body_dict):
 def main(event, context):
     """
     API Gateway handler for triggering the research process.
-    GET /research/website/{websiteId}/post/{postId}
+    GET /research?website={websiteId}&post={postId}
     """
-    logger.info(f"Received API Gateway event: {json.dumps(event, indent=2)}")
-
-    # Check if initialization failed
-    if not db_helper:
-        return format_response(500, {"error": "Internal server configuration error (DB Helper)."})
-    if not bucket_name:
-        logger.error("Error: CONTENT_BUCKET_NAME environment variable not set.")
-        return format_response(500, {"error": "Internal server configuration error (Bucket Name)."})
+    logger.debug(f"Received API Gateway event: {json.dumps(event, indent=2)}")
     
-    post_id_from_path = None 
-    website_id_from_path = None
+    post_id = None
+    website_id = None
 
     try:
-        # --- 1. Parse Path Parameters ---
-        logger.info("--- 1. Parse Path Parameters ---")
-        path_params = event.get('pathParameters', {})
-        website_id_from_path = path_params.get('websiteId')
-        post_id_from_path = path_params.get('postId')
+        # --- Parse Query Params ---
+        query_params = event.get('queryStringParameters', {})
+        if query_params is None: query_params = {}
+        website_id = query_params.get('websiteId')
+        post_id = query_params.get('postId')
+        if not website_id or not post_id:
+            logger.warning("Missing websiteId or postId in query string parameters.")
+            return format_response(400, {"error": "Missing required query parameters: websiteId, postId"})
 
-        if not website_id_from_path or not post_id_from_path:
-            logger.error("Missing path parameters in request.")
-            return format_response(400, {"error": "Missing websiteId or postId in path parameters."})
+        logger.info(f"Handler invoked for websiteId: {website_id}, postId: {post_id}")
 
-        logger.info(f"Extracted websiteId: {website_id_from_path}, postId: {post_id_from_path}")
+        # --- Instantiate and Call Service ---
+        service = ResearchService()
+        result = service.process_research_request(website_id=website_id, post_id=post_id)
 
-        db_helper.update_post_status(post_id_from_path, "RESEARCH_STARTED")
+        # --- Format Success Response ---
+        logger.info(f"Request processed successfully for postId: {post_id}")
+        return format_response(200, result)
 
-        # --- 2. Fetch Post & Validate Website ID using Helper ---
-        logger.info("--- 2. Fetch Post & Validate Website ID using Helper ---")
-        post_item = db_helper.get_post(post_id_from_path)
-        if not post_item:
-            logger.error(f"Post item with postId '{post_id_from_path}' not found.")
-            return format_response(404, {"error": f"Post with postId '{post_id_from_path}' not found."})
-
-        website_id_from_db = post_item.get('websiteId')
-        blog_title = post_item.get('blogTitle')
-
-        if not website_id_from_db:
-            logger.error(f"Post item '{post_id_from_path}' is missing websiteId attribute.")
-            return format_response(500, {"error": f"Post item '{post_id_from_path}' is missing websiteId attribute."})
-        if not blog_title:
-            logger.error(f"Post item '{post_id_from_path}' is missing blogTitle attribute.")
-            return format_response(500, {"error": f"Post item '{post_id_from_path}' is missing blogTitle attribute."})
-        if website_id_from_path != website_id_from_db:
-            logger.error(f"Forbidden: Path websiteId '{website_id_from_path}' does not match item's websiteId '{website_id_from_db}'")
-            return format_response(403, {"error": "Access denied: Website ID mismatch."})
-
-        website_id = website_id_from_db # Use validated ID
-        logger.info(f"WebsiteId validated: {website_id}")
-
-        # --- 3. Fetch Website Settings using Helper ---
-        logger.info("--- 3. Fetch Website Settings using Helper ---")
-        website_settings = db_helper.get_website_settings(website_id)
-        if not website_settings:
-            logger.error(f"Website settings for websiteId '{website_id}' not found.")
-            return format_response(404, {"error": f"Website settings for websiteId '{website_id}' not found."})
-
-        # --- 4. Call the Research Agent ---
-        logger.info("--- 4. Call the Research Agent ---")
-        logger.info(f"Calling research agent for postId '{post_id_from_path}'...")
-        raw_article_text = generate_research_draft(
-            blog_title=blog_title,
-            website_settings=website_settings
-        )
-        logger.info(f"Agent completed. Received text length: {len(raw_article_text)}")
-
-        # --- 5. Save Agent Output using S3 Helper ---
-        logger.info("--- 5. Save Agent Output using S3 Helper ---")
-        logger.info(f"Saving research article text to S3 for postId '{post_id_from_path}'...")
-        s3_key = f"{website_id}/{post_id_from_path}/research_article.txt"
-        s3_uri = s3_helper.save_text_file(
-            key=s3_key,
-            content=raw_article_text
-        )
-        if not s3_uri:
-            logger.error(f"Failed to save research article to S3 for postId '{post_id_from_path}'.")
-            # Decide how to handle - maybe still update DB with error? Or fail request?
-            return format_response(500, {"error": "Failed to save generated article."})
-        
-        logger.info(f"Article saved successfully to: {s3_uri}")
-
-        # --- 6. Update Post Item using Helper ---
-        logger.info("--- 6. Update Post Item using Helper ---")
-        logger.info(f"Updating post item '{post_id_from_path}' with researchArticleUri...")
-        update_success = db_helper.update_post_research_uri(post_id_from_path, s3_uri)
-
-        if not update_success:
-            # Log the error but return success as the main task completed
-            logger.warning(f"Warning: Article generated but failed to update post status for {post_id_from_path}.")
-            return format_response(200, {
-                "message": "Research article generated but failed to update post status in DynamoDB.",
-                "postId": post_id_from_path,
-                "researchArticleUri": s3_uri
-            })
-        
-        status_updated = db_helper.update_post_status(post_id_from_path, "RESEARCH_COMPLETE")
-
-        if not status_updated:
-             logger.warning(f"Article generated and URI update attempted, but failed to update final status for {post_id_from_path}.")
-             # Still return success to user, but log clearly
-             return format_response(200, {
-                "message": "Research article generated but failed to update final post status.",
-                "postId": post_id_from_path,
-                "researchArticleUri": s3_uri
-            })
-
-        # --- 7. Return Success Response ---
-        logger.info("--- 7. Return Success Response ---")
-        logger.info(f"Post item '{post_id_from_path}' updated successfully with researchArticleUri: {s3_uri}.")
-        return format_response(200, {
-            "message": "Research article generated and post updated successfully.",
-            "postId": post_id_from_path,
-            "researchArticleUri": s3_uri
-        })
-
-    except Exception as e: # Catch unexpected errors
-        logger.error(f"Unhandled error processing request for postId '{post_id_from_path}', {e}")
-        # --- Attempt to update status to FAILED ---
-        if post_id_from_path and db_helper: # Check if we have ID and helper
-             logger.info(f"Attempting to update status to RESEARCH_FAILED for postId '{post_id_from_path}' due to error.")
-             db_helper.update_post_status(post_id_from_path, "RESEARCH_FAILED") # Best effort status update
-             
-        # Return error response to API Gateway
-        if isinstance(e, ValueError): # Handle known value errors distinctly
-             return format_response(400, {"error": str(e)})
-        else:
-             return format_response(500, {"error": "An unexpected error occurred."})
+    except ServiceError as se: # Catch specific service errors
+        # Log includes service name and status code from the error object itself
+        logger.error(f"Service Error processing request for postId '{post_id}': {se}") 
+        return format_response(se.status_code, {"error": se.message}) # Use status code from error
+    except Exception as e: # Catch unexpected errors (like service init failure)
+        logger.exception(f"Unhandled error in handler for postId '{post_id}'")
+        return format_response(500, {"error": "An unexpected internal error occurred."})
     

@@ -33,27 +33,28 @@ class ResearchService:
         return generate_openai_draft
 
     def process_research_request(self, website_id: str, post_id: str) -> dict:
-        """
-        Handles the end-to-end research process for a given post.
-        """
+        """Handles the end-to-end research process for a given post."""
         final_status = "RESEARCH_FAILED" # Default status if error occurs early
         try:
             logger.info(f"Starting research process for websiteId: {website_id}, postId: {post_id}")
 
             # --- 1. Update Status: STARTED ---
             logger.info("--- 1. Update Status: STARTED ---")
-            if not self.db_helper.update_post_status(post_id, "RESEARCH_STARTED"):
+
+            update_success = self.db_helper.update_post_item(post_id, {DynamoDBHelper.POST_STATUS: 'RESEARCH_STARTED'})
+            if not update_success:
                  logger.warning(f"Failed to update status to STARTED for postId {post_id}. Continuing...")
                  # Decide if this is critical enough to stop
 
             # --- 2. Fetch Post & Validate Website ID ---
             logger.info("--- 2. Fetch Post & Validate Website ID ---")
+
             post_item = self.db_helper.get_post(post_id)
             if not post_item:
                 raise ServiceError(f"Post with postId '{post_id}' not found.", 404, service_name=SERVICE_NAME)
 
-            website_id_from_db = post_item.get('websiteId')
-            blog_title = post_item.get('blogTitle')
+            website_id_from_db = post_item.get(DynamoDBHelper.WEBSITE_ID)
+            blog_title = post_item.get(DynamoDBHelper.BLOG_TITLE)
 
             if not website_id_from_db:
                 raise ServiceError(f"Post item '{post_id}' is missing websiteId attribute.", 500, service_name=SERVICE_NAME)
@@ -68,6 +69,7 @@ class ResearchService:
 
             # --- 3. Fetch Website Settings ---
             logger.info("--- 3. Fetch Website Settings ---")
+
             website_settings = self.db_helper.get_website_settings(website_id)
             if not website_settings:
                 raise ServiceError(f"Website settings for websiteId '{website_id}' not found.", 404, service_name=SERVICE_NAME)
@@ -75,6 +77,7 @@ class ResearchService:
 
             # --- 4. Select and Call Agent ---
             logger.info("--- 4. Select and Call Agent ---")
+
             research_agent_func = self._select_agent(website_settings)
             logger.info(f"Calling agent function {research_agent_func.__name__}...")
             raw_article_text = research_agent_func( # Agent only needs content generation context
@@ -87,6 +90,7 @@ class ResearchService:
 
             # --- 5. Save Output to S3 ---
             logger.info("--- 5. Save Output to S3 ---")
+
             s3_key = f"{website_id}/{post_id}/research_article.txt"
             logger.info(f"Saving research article text to S3 - {s3_key}")
             s3_uri = self.s3_helper.save_text_file(key=s3_key, content=raw_article_text)
@@ -97,26 +101,19 @@ class ResearchService:
 
             # --- 6. Update Post Item URI ---
             logger.info("--- 6. Update Post Item URI ---")
-            logger.info(f"Updating post item '{post_id}' with researchArticleUri...")
-            uri_update_success = self.db_helper.update_post_research_uri(post_id, s3_uri)
-            if not uri_update_success:
-                # Log warning but don't fail the whole request at this stage
-                logger.warning(f"S3 save succeeded but failed to update research URI for {post_id}.")
-
-
-            # --- 7. Update Status: COMPLETE ---
-            logger.info("--- 7. Update Status: COMPLETE ---")
-            final_status = "RESEARCH_COMPLETE" # Set final status before updating
-            status_update_success = self.db_helper.update_post_status(post_id, final_status)
-            if not status_update_success:
-                 logger.warning(f"Article processed, but failed to update final status for {post_id}.")
+            
+            logger.info(f"Updating post item '{post_id}' with researchArticleUri - {s3_uri}")
+            final_status = "RESEARCH_COMPLETE"
+            update_success = self.db_helper.update_post_item(post_id, {DynamoDBHelper.RESEARCH_ARTICLE_URI: s3_uri, DynamoDBHelper.POST_STATUS: final_status})
+            if not update_success:
+                 logger.warning(f"Article processed, but failed to update final status, uri for {post_id}.")
                  # Still return success, but maybe indicate partial success in message?
 
-            # --- 8. Prepare Success Result ---
-            logger.info("--- 8. Prepare Success Result ---")
+            # --- 7. Prepare Success Result ---
+            logger.info("--- 7. Prepare Success Result ---")
             logger.info(f"Successfully processed request for postId: {post_id}")
             return {
-                "message": "Research article generated, saved, and post updated successfully." if status_update_success and uri_update_success else "Research article generated and saved; post update may have failed.",
+                "message": "Research article generated, saved, and post updated successfully." if update_success else "Research article generated and saved; post update may have failed.",
                 "postId": post_id,
                 "researchArticleUri": s3_uri
             }
@@ -126,7 +123,7 @@ class ResearchService:
             # Attempt to set failed status if possible
             if post_id: # Check if we have post_id
                 logger.info(f"Attempting to update status to {final_status} for postId '{post_id}' due to error.")
-                self.db_helper.update_post_status(post_id, final_status)
+                self.db_helper.update_post_item(post_id, {DynamoDBHelper.POST_STATUS: final_status})
             # Re-raise original or custom error for handler
             if isinstance(e, ServiceError):
                 raise # Re-raise specific service errors

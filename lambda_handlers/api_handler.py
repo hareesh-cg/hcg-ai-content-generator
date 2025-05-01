@@ -33,7 +33,7 @@ def format_response(status_code, body_dict):
 def main(event, context):
     """
     API Gateway handler for various content generation functions, routed by query param.
-    GET /generate-content?function={func_name}&websiteId={websiteId}&postId={postId}
+    GET /content-api?functionName={func_name}&websiteId={websiteId}&postId={postId}
     """
     logger.debug("Received API Gateway event: %s", json.dumps(event, indent=2))
     
@@ -46,14 +46,14 @@ def main(event, context):
         query_params = event.get('queryStringParameters', {})
         if query_params is None: query_params = {}
              
-        function_name = query_params.get('function')
+        function_name = query_params.get('functionName')
         website_id = query_params.get('websiteId')
         post_id = query_params.get('postId')
 
         # Validate required parameters
         if not function_name:
-            logger.warning("Missing 'function' query parameter.")
-            return format_response(400, {"error": "Missing required query parameter: function"})
+            logger.warning("Missing 'functionName' query parameter.")
+            return format_response(400, {"error": "Missing required query parameter: functionName"})
         if not website_id:
             logger.warning("Missing 'websiteId' query parameter.")
             return format_response(400, {"error": "Missing required query parameter: websiteId"})
@@ -61,7 +61,7 @@ def main(event, context):
             logger.warning("Missing 'postId' query parameter.")
             return format_response(400, {"error": "Missing required query parameter: postId"})
 
-        logger.info(f"Handler invoked for function: '{function_name}', websiteId: '{website_id}', postId: '{post_id}'")
+        logger.info(f"Handler invoked for functionName: '{function_name}', websiteId: '{website_id}', postId: '{post_id}'")
 
         # --- 2. Get appropriate Service Instance ---
         service_instance = get_service_instance(function_name)
@@ -78,20 +78,20 @@ def main(event, context):
         result = service_instance.process_request(event_data=event_data_for_service)
 
         # --- 4. Format Success Response ---
-        logger.info(f"Request processed successfully for function '{function_name}', postId: {post_id}")
+        logger.info(f"Request processed successfully for functionName '{function_name}', postId: {post_id}")
         return format_response(200, result) # Result dict comes from the service
 
     except ServiceError as se: 
-        logger.error(f"Service Error processing request (function: {function_name}, postId: {post_id}): {se}") 
+        logger.error(f"Service Error processing request (functionName: {function_name}, postId: {post_id}): {se}") 
         return format_response(se.status_code, {"error": se.message}) 
     except Exception as e: 
-        logger.exception(f"Unhandled error in handler (function: {function_name}, postId: {post_id})")
+        logger.exception(f"Unhandled error in handler (functionName: {function_name}, postId: {post_id})")
         return format_response(500, {"error": "An unexpected internal error occurred."})
     
 def get_service_instance(function_name: str):
     """Gets an instance of the appropriate service class based on the function name."""
 
-    logger.info(f"Attempting to get service instance for function: '{function_name}'")
+    logger.info(f"Attempting to get service instance for functionName: '{function_name}'")
     service_class = SERVICE_MAP.get(function_name.lower()) # Use lower case for case-insensitivity
 
     if not service_class:
@@ -108,4 +108,4 @@ def get_service_instance(function_name: str):
         raise se 
     except Exception as e:
         logger.exception(f"Unexpected error instantiating service: {function_name}")
-        raise ServiceError(f"Could not initialize service for function '{function_name}'.", 500, service_name="ServiceFactory") from e
+        raise ServiceError(f"Could not initialize service for functionName '{function_name}'.", 500, service_name="ServiceFactory") from e

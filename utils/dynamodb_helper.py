@@ -4,25 +4,12 @@ from botocore.exceptions import ClientError
 import time
 
 from utils.logger_config import get_logger
+import utils.constants as Constants
 
 logger = get_logger(__name__)
 
 class DynamoDBHelper:
     """Handles interactions with DynamoDB tables."""
-
-    POST_ID = "postId" # Partition Key
-    BLOG_TITLE = "blogTitle"
-    POST_STATUS = "postStatus" # Status field
-    RESEARCH_ARTICLE_URI = "researchArticleUri"
-    REFINED_ARTICLE_URI = "refinedArticleUri"
-    MARKDOWN_URI = "markdownUri"
-    IMAGE_PROMPTS = "imagePrompts"
-    IMAGE_URIS = "imageUris"
-    METADATA = "metadata"
-    UPDATE_TIMESTAMP = "updateTimestamp"
-
-    # Website Settings Table Attributes
-    WEBSITE_ID = "websiteId" # Partition Key
 
     def __init__(self):
         """Initializes the helper and table resources."""
@@ -37,7 +24,7 @@ class DynamoDBHelper:
             dynamodb_resource = boto3.resource('dynamodb')
             self.posts_table = dynamodb_resource.Table(self.posts_table_name)
             self.settings_table = dynamodb_resource.Table(self.settings_table_name)
-            logger.info(f"DynamoDBHelper initialized for tables: {self.posts_table_name}, {self.settings_table_name}")
+            logger.info(f"DynamoDBHelper initialized for tables: {self.posts_table_name}, {self.settings_table_name}")            
         except Exception as e:
             logger.error(f"Error initializing DynamoDB resources: {e}")
             raise ValueError("Failed to initialize DynamoDB table resources") from e
@@ -46,7 +33,7 @@ class DynamoDBHelper:
         """Gets an item from the Posts table by postId."""
         logger.info(f"Getting post item with postId: {post_id}")
         try:
-            response = self.posts_table.get_item(Key={self.POST_ID: post_id})
+            response = self.posts_table.get_item(Key={Constants.POST_ID: post_id})
             item = response.get('Item')
             if item:
                 logger.debug("Post item found.")
@@ -110,7 +97,7 @@ class DynamoDBHelper:
 
         try:
             update_kwargs = {
-                'Key': {self.POST_ID: post_id},
+                'Key': {Constants.POST_ID: post_id},
                 'UpdateExpression': update_expression,
                 'ExpressionAttributeValues': expression_attribute_values,
                 'ReturnValues': "NONE"

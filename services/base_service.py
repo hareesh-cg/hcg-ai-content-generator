@@ -1,9 +1,11 @@
 import os
 from abc import ABC, abstractmethod # Import Abstract Base Classes tools
+
 from utils.logger_config import get_logger
 from utils.dynamodb_helper import DynamoDBHelper
 from utils.s3_helper import S3Helper
 from utils.errors import ServiceError
+import utils.constants as Constants
 
 logger = get_logger(__name__)
 
@@ -88,7 +90,7 @@ class BaseContentService(ABC):
             if not post_item:
                  raise ServiceError(f"Post with postId '{post_id}' not found.", 404, service_name=self.service_name)
             
-            website_id_from_db = post_item.get(DynamoDBHelper.WEBSITE_ID)
+            website_id_from_db = post_item.get(Constants.WEBSITE_ID)
             if not website_id_from_db:
                 raise ServiceError(f"Post item '{post_id}' is missing websiteId attribute.", 500, service_name=self.service_name)
             
@@ -170,7 +172,7 @@ class BaseContentService(ABC):
         if not post_id: return # Cannot update if postId is missing
         logger.info(f"[{self.service_name}] Attempting to update status to '{status}' for postId '{post_id}'")
         # Use constant for attribute name
-        success = self.db_helper.update_post_item(post_id, {DynamoDBHelper.POST_STATUS: status})
+        success = self.db_helper.update_post_item(post_id, {Constants.POST_STATUS: status})
         if not success:
             logger.warning(f"[{self.service_name}] Failed to update status to '{status}' for postId {post_id}.")
         return success

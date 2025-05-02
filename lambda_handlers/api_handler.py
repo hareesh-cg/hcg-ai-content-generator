@@ -5,13 +5,14 @@ from utils.logger_config import setup_logging, get_logger
 from utils.errors import ServiceError
 
 from services.research_service import ResearchService
+from services.refine_service import RefineService
 
 setup_logging() 
 logger = get_logger(__name__)
 
 SERVICE_MAP = {
     "research": ResearchService,
-    # "rewrite": RewriteService, # Example
+    "refine": RefineService,
     # "image_prompt": ImagePromptService, # Example
     # ... add other mappings ...
 }

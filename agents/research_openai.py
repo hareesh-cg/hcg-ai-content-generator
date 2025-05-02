@@ -18,20 +18,8 @@ except Exception as e:
     llm_client = None
 
 def generate_research_draft(blog_title: str, website_settings: dict) -> str:
-    """
-    Generates the research draft text using OpenAI based on input context.
-
-    Args:
-        blog_title: The title of the blog post.
-        website_settings: Dictionary containing website context.
-
-    Returns:
-        The generated raw article text as a string.
-
-    Raises:
-        ValueError: If LLM client isn't initialized or LLM fails.
-        Exception: For other unexpected errors during LLM call.
-    """
+    """Generates the research draft text using OpenAI based on input context."""
+    
     if not llm_client:
         logger.error("LLM Client not initialized during function call.")
         raise ValueError("LLM Client not initialized.")

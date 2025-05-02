@@ -1,12 +1,15 @@
 import os
+
 from utils.logger_config import get_logger
 # Import base class, helpers, errors
 from services.base_service import BaseContentService 
 from utils.dynamodb_helper import DynamoDBHelper # Still need constants
 from utils.s3_helper import S3Helper
-from utils.errors import ServiceError 
+from utils.errors import ServiceError
+import utils.constants as Constants
+
 # Import the specific agent implementation
-from agents.research_openai import generate_research_draft as generate_openai_draft 
+from agents.research_openai import generate_research_draft as generate_openai_draft
 
 logger = get_logger(__name__)
 SERVICE_NAME = "ResearchService"
@@ -26,7 +29,7 @@ class ResearchService(BaseContentService): # Inherit from base
     @property
     def output_uri_db_key(self) -> str:
         # The DynamoDB attribute name for this service's output URI
-        return DynamoDBHelper.RESEARCH_ARTICLE_URI
+        return Constants.RESEARCH_ARTICLE_URI
 
     # --- Implement Abstract Methods ---
 
@@ -38,9 +41,9 @@ class ResearchService(BaseContentService): # Inherit from base
 
     def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, previous_step_output: any = None) -> any:
         """Calls the research agent."""
-        blog_title = post_item.get(DynamoDBHelper.BLOG_TITLE)
+        blog_title = post_item.get(Constants.BLOG_TITLE)
         if not blog_title:
-            raise ServiceError(f"Missing '{DynamoDBHelper.BLOG_TITLE}' in post item.", 500, service_name=self.service_name)
+            raise ServiceError(f"Missing '{Constants.BLOG_TITLE}' in post item.", 500, service_name=self.service_name)
             
         # Call the selected agent function (which is generate_openai_draft in this case)
         return agent_function(

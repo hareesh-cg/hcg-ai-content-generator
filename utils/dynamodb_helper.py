@@ -48,7 +48,7 @@ class DynamoDBHelper:
         """Gets an item from the WebsiteSettings table by websiteId."""
         logger.info(f"Getting website settings with websiteId: {website_id}")
         try:
-            response = self.settings_table.get_item(Key={self.WEBSITE_ID: website_id})
+            response = self.settings_table.get_item(Key={Constants.WEBSITE_ID: website_id})
             item = response.get('Item')
             if item:
                 logger.debug("Website settings found.")

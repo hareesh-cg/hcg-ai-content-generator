@@ -71,7 +71,7 @@ class DynamoDBHelper:
         logger.info(f"Updating post item '{post_id}' with attributes: {list(attributes_to_update.keys())}")
 
         # Add updateTimestamp automatically
-        attributes_to_update[self.UPDATE_TIMESTAMP] = int(time.time())
+        attributes_to_update[Constants.UPDATE_TIMESTAMP] = int(time.time())
 
         # Construct UpdateExpression and ExpressionAttributeValues dynamically
         update_expression_parts = []

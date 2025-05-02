@@ -42,7 +42,7 @@ class RefineService(BaseContentService): # Inherit from base
         """Downloads raw content and calls the refine agent."""
         
         # Get the input URI from the event data passed to process_request
-        raw_article_uri = website_settings.get(Constants.RESEARCH_ARTICLE_URI)
+        raw_article_uri = post_item.get(Constants.RESEARCH_ARTICLE_URI)
         if not raw_article_uri:
              raise ServiceError(f"Missing '{Constants.RESEARCH_ARTICLE_URI}' in input data for refine.", 400, service_name=self.service_name)
 

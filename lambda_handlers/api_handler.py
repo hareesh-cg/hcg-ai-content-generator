@@ -6,6 +6,7 @@ from utils.errors import ServiceError
 
 from services.research_service import ResearchService
 from services.refine_service import RefineService
+from services.image_prompt_service import ImagePromptService
 
 setup_logging() 
 logger = get_logger(__name__)
@@ -13,8 +14,7 @@ logger = get_logger(__name__)
 SERVICE_MAP = {
     "research": ResearchService,
     "refine": RefineService,
-    # "image_prompt": ImagePromptService, # Example
-    # ... add other mappings ...
+    "imageprompt": ImagePromptService,
 }
 
 # --- API Gateway Response Helper (remains the same) ---

@@ -13,3 +13,5 @@ UPDATE_TIMESTAMP = "updateTimestamp"
 
 # Website Settings Table Attributes
 WEBSITE_ID = "websiteId" # Partition Key
+
+S3_IMAGE_FOLDER = "images" # Subfolder for images within post path

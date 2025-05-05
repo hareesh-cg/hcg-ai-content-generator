@@ -1,6 +1,10 @@
 import os
 import boto3
 from botocore.exceptions import ClientError
+import requests
+import mimetypes
+
+import utils.constants as Constants
 from utils.logger_config import get_logger # Use the logger helper
 
 logger = get_logger(__name__)
@@ -72,4 +76,51 @@ class S3Helper:
             return None
         except Exception as e:
             logger.exception(f"An unexpected error occurred during S3 download from key {key}")
+            return None
+        
+    def download_and_save_image(self, image_url: str, website_id: str, post_id: str, image_index: int) -> str | None:
+        """
+        Downloads an image from a URL and saves it to S3.
+        Generates a unique filename based on index.
+        """
+        if not image_url:
+            logger.error("No image URL provided for download.")
+            return None
+
+        logger.info(f"Downloading image from URL: {image_url}")
+        try:
+            # Download the image
+            response = requests.get(image_url, stream=True, timeout=30) # Add timeout
+            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+
+            # Determine content type and extension
+            content_type = response.headers.get('content-type', 'image/png') # Default to png
+            extension = mimetypes.guess_extension(content_type) or '.png' # Guess extension
+
+            # Construct S3 key
+            filename = f"image_{image_index}{extension}"
+            s3_key = f"{website_id}/{post_id}/{Constants.S3_IMAGE_FOLDER}/{filename}"
+
+            logger.info(f"Uploading downloaded image to s3://{self.bucket_name}/{s3_key} (Content-Type: {content_type})")
+
+            # Upload to S3 directly from the stream
+            self.s3_client.upload_fileobj(
+                response.raw, # Use the raw byte stream
+                self.bucket_name,
+                s3_key,
+                ExtraArgs={'ContentType': content_type}
+            )
+
+            s3_uri = f"s3://{self.bucket_name}/{s3_key}"
+            logger.info(f"Image upload successful. URI: {s3_uri}")
+            return s3_uri
+
+        except requests.exceptions.RequestException as re:
+            logger.exception(f"Failed to download image from URL: {image_url}")
+            return None
+        except ClientError as ce:
+            logger.exception(f"Failed to upload image to S3 key: {s3_key}")
+            return None
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred during image download/upload for {image_url}")
             return None

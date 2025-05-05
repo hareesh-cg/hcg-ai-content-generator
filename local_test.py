@@ -17,6 +17,7 @@ from utils.logger_config import setup_logging # Ensure logging is set up
 from services.research_service import ResearchService
 from services.refine_service import RefineService
 from services.image_prompt_service import ImagePromptService
+from services.image_gen_service import ImageGenService
 
 # --- Test Configuration ---
 TEST_WEBSITE_ID = "my-test-blog-v1" # Use an ID that exists in your DynamoDB
@@ -40,7 +41,8 @@ if __name__ == "__main__":
         # Execute the service method
         # test_service = ResearchService()
         # test_service = RefineService()
-        test_service = ImagePromptService()
+        # test_service = ImagePromptService()
+        test_service = ImageGenService()
 
         result = test_service.process_request(event_data)
 

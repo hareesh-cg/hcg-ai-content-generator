@@ -18,21 +18,8 @@ except Exception as e:
     llm_client = None
 
 def generate_image_prompts(refined_article_content: str, website_settings: dict, num_prompts: int = 3) -> list[str]:
-    """
-    Analyzes refined article text and generates image prompts using OpenAI.
+    """Analyzes refined article text and generates image prompts using OpenAI."""
 
-    Args:
-        refined_article_content: The full text of the refined article.
-        website_settings: Dictionary containing website context, especially 'imageStylePrompt'.
-        num_prompts: The desired number of prompts to generate.
-
-    Returns:
-        A list of generated image prompt strings.
-
-    Raises:
-        ValueError: If LLM client isn't initialized or LLM fails.
-        Exception: For other unexpected errors.
-    """
     if not llm_client:
         logger.error("LLM Client not initialized during image prompt function call.")
         raise ValueError("LLM Client not initialized.")
@@ -108,4 +95,85 @@ def generate_image_prompts(refined_article_content: str, website_settings: dict,
 
     except Exception as e:
         logger.exception("An error occurred during the image prompt LLM call.")
-        raise # Re-raise the exception
+        raise
+    
+def generate_image_prompts_and_slugs(refined_article_content: str, website_settings: dict, num_prompts: int = 3) -> list[dict]:
+    """Generates image prompts AND corresponding URL-safe slugs."""
+    logger.info(f"Starting image prompt and slug generation. Aiming for {num_prompts}.")
+    
+    image_style = website_settings.get('imageStylePrompt', 'realistic photo')
+    blog_title = website_settings.get('blogTitle', 'the article topic')
+
+    # --- UPDATED PROMPT ---
+    prompt = f"""
+    Please act as a creative visual director and SEO assistant. Analyze the following article draft about "{blog_title}" and generate exactly {num_prompts} diverse and compelling text prompts suitable for an AI image generation model (like DALL-E 3). For EACH prompt, ALSO generate a short, descriptive, URL-safe slug (lowercase, alphanumeric, hyphens only) based on the prompt's core subject.
+
+    **Instructions for Prompts:**
+    - Each prompt should describe a distinct visual concept relevant to different sections or key ideas within the article.
+    - Prompts should be descriptive, focusing on visual elements (subjects, actions, setting, mood, style).
+    - Incorporate the desired overall image style: "{image_style}". Mention this style within each prompt.
+    - Avoid prompts that are just summaries of text sections. Focus on visual representation.
+
+    **Instructions for Slugs:**
+    - Each slug should directly correspond to the image prompt it accompanies.
+    - Slugs should be short (2-5 words typically).
+    - Slugs must be URL-safe: use only lowercase letters, numbers, and hyphens (-). Replace spaces and other characters with hyphens. Remove articles like 'a', 'the'.
+    - Slugs should capture the main subject or theme of the image prompt.
+
+    **Output Format:**
+    - Output **only** a valid JSON list of objects. Each object must have exactly two keys: "prompt" (string value) and "slug" (string value).
+    - Example: [{{"prompt": "A futuristic cityscape with flying cars, {image_style}", "slug": "futuristic-cityscape-flying-cars"}}, {{"prompt": "...", "slug": "..."}}]
+
+    **Refined Article Draft:**
+    --- START OF DRAFT ---
+    {refined_article_content[:8000]} 
+    --- END OF DRAFT (Snippet)--- 
+    """ 
+    
+    logger.info("Constructed Image Prompt/Slug Generation Prompt - sending to LLM...")
+    
+    try:
+        response = llm_client.chat.completions.create(
+            model="gpt-4o", 
+            response_format={ "type": "json_object" }, 
+            messages=[
+                 {"role": "system", "content": f"You are a helpful assistant generating JSON lists of image prompts and corresponding URL-safe slugs based on article text. Desired style: '{image_style}'. Follow format instructions precisely."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.8,
+        )
+        response_content = response.choices[0].message.content
+        logger.debug(f"Raw LLM response for image prompts/slugs: {response_content}")
+
+        # --- UPDATED PARSING ---
+        try:
+            output_data = json.loads(response_content)
+            # Expecting a list directly, or under a key like 'results' or 'prompts'
+            prompt_slug_list = output_data if isinstance(output_data, list) else output_data.get("results") or output_data.get("prompts")
+
+            if isinstance(prompt_slug_list, list) and \
+               all(isinstance(item, dict) and "prompt" in item and "slug" in item for item in prompt_slug_list):
+                
+                # Basic validation on slugs? (Optional)
+                validated_list = []
+                for item in prompt_slug_list[:num_prompts]:
+                    # Simple cleanup in case LLM didn't follow rules perfectly
+                    slug = item.get("slug", f"image-{len(validated_list)}").lower()
+                    slug = ''.join(c for c in slug if c.isalnum() or c == '-') # Keep only alphanum and hyphen
+                    slug = '-'.join(slug.split('-')) # Remove multiple hyphens? (more advanced slugify needed for robustness)
+                    item["slug"] = slug if slug else f"image-{len(validated_list)}" # Ensure slug isn't empty
+                    validated_list.append(item)
+
+                logger.info(f"Successfully parsed {len(validated_list)} prompt/slug pairs from LLM response.")
+                return validated_list
+            else:
+                logger.error(f"LLM response was valid JSON but not the expected list of {{'prompt':..., 'slug':...}} objects: {output_data}")
+                raise ValueError("LLM did not return the expected JSON list format for prompts/slugs.")
+        except (json.JSONDecodeError, TypeError, AttributeError) as json_e:
+             logger.error(f"Failed to parse JSON response from LLM: {json_e}. Response was: {response_content}")
+             raise ValueError("Failed to parse image prompt/slug list from LLM response.") from json_e
+
+    except Exception as e:
+        logger.exception("An error occurred during the image prompt/slug LLM call.")
+        raise
+    

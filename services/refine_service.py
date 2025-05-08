@@ -8,22 +8,21 @@ from utils.errors import ServiceError
 import utils.constants as Constants
 
 # Import the specific agent implementation
-from agents.refine_openai import refine_article_content as refine_openai_content
+from agents.refine_openai import execute as refine_openai_content
 
 logger = get_logger(__name__)
-SERVICE_NAME = "RefineService"
 
 class RefineService(BaseContentService): # Inherit from base
     """Orchestrates the article refine process."""
 
     def __init__(self):
         # Initialize the base class
-        super().__init__(service_name=SERVICE_NAME) 
+        super().__init__(service_name="RefineService") 
 
     # --- Implement Abstract Properties ---
     @property
     def status_prefix(self) -> str:
-        return "REFINE" # e.g., REFINE_STARTED, REFINE_COMPLETE
+        return "REFINE"
 
     @property
     def output_uri_db_key(self) -> str:
@@ -38,7 +37,7 @@ class RefineService(BaseContentService): # Inherit from base
         logger.info(f"[{self.service_name}] Selecting OpenAI agent for refine.")
         return refine_openai_content # Return the function object
 
-    def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, previous_step_output: dict) -> any:
+    def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, event_data: dict) -> any:
         """Downloads raw content and calls the refine agent."""
         
         # Get the input URI from the event data passed to process_request
@@ -54,10 +53,13 @@ class RefineService(BaseContentService): # Inherit from base
         
         logger.info(f"[{self.service_name}] Raw article downloaded. Length: {len(raw_article_text)}")
 
+        event_data["raw_article_content"] = raw_article_text
+
         # Call the selected agent function (which is refine_openai_content)
         return agent_function(
-            raw_article_content=raw_article_text,
-            website_settings=website_settings # Pass settings dict
+            post_item=post_item,
+            website_settings=website_settings,
+            event_data=event_data
         )
 
     def _save_agent_output(self, website_id: str, post_id: str, agent_output: any) -> str | None:

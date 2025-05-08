@@ -1,6 +1,8 @@
 import os
 from openai import OpenAI
+
 from utils.logger_config import get_logger
+from utils import constants as Constants
 
 logger = get_logger(__name__)
 
@@ -15,24 +17,33 @@ except Exception as e:
     logger.exception("CRITICAL: Error initializing LLM client for RefineAgent.")
     llm_client = None
 
-def refine_article_content(raw_article_content: str, website_settings: dict) -> str:
+def execute(post_item: dict, website_settings: dict, event_data: dict) -> str:
     """Refines the provided raw article text using OpenAI based on website settings."""
     
     if not llm_client:
         logger.error("LLM Client not initialized during refine function call.")
         raise ValueError("LLM Client not initialized.")
+    
+    raw_article_content = event_data.get('raw_article_content')
     if not raw_article_content:
-        logger.warning("Received empty raw_article_content for refine.")
-        return "" # Return empty if input is empty
-
-    logger.info(f"Starting refine process. Original length: {len(raw_article_content)}")
+        logger.error("Missing 'raw_article_content' in event_data for refine agent.")
+        raise ValueError("Missing 'raw_article_content' for refine agent.")
 
     # --- Extract Settings and Construct Prompt ---
-    brand_tone = website_settings.get('brandTone', 'neutral and informative')
-    min_len_str = website_settings.get('articleLengthMin', '1500') # Keep as string for prompt
-    max_len_str = website_settings.get('articleLengthMax', '2500') # Keep as string for prompt
-    target_audience = website_settings.get('targetAudience', 'a general audience')
-    blog_title = website_settings.get('blogTitle', 'the provided topic') # Get title if passed in settings
+    blog_title = post_item.get(Constants.BLOG_TITLE, 'the provided topic') # Get from post_item
+    brand_tone = website_settings.get(Constants.BRAND_TONE, 'neutral and informative') # Use Constant
+    # Fetch numeric values for prompt formatting, handle potential non-numeric data
+    try:
+      min_len_str = str(int(website_settings.get(Constants.ARTICLE_LENGTH_MIN, 1500)))
+      max_len_str = str(int(website_settings.get(Constants.ARTICLE_LENGTH_MAX, 2500)))
+    except (ValueError, TypeError):
+        logger.warning("Could not parse article length settings, using defaults for prompt.")
+        min_len_str = "1500"
+        max_len_str = "2500"
+        
+    target_audience = website_settings.get(Constants.TARGET_AUDIENCE, 'a general audience')
+
+    logger.info(f"Starting refine process. Original length: {len(raw_article_content)}")
 
     # Construct detailed refine prompt
     prompt = f"""
@@ -59,7 +70,6 @@ def refine_article_content(raw_article_content: str, website_settings: dict) -> 
     Please provide the fully refined article below:
     """
     logger.info("Constructed Refine Prompt - sending to LLM...")
-    # logger.debug(f"Refine prompt snippet: {prompt[:500]}...")
 
     try:
         # --- Call LLM API ---

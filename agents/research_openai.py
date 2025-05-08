@@ -3,6 +3,7 @@ import boto3
 from openai import OpenAI # Or your chosen LLM client library
 
 from utils.logger_config import get_logger
+from utils import constants as Constants
 
 logger = get_logger(__name__)
 
@@ -17,21 +18,25 @@ except Exception as e:
     logger.exception("CRITICAL: Error initializing LLM client.")
     llm_client = None
 
-def generate_research_draft(blog_title: str, website_settings: dict) -> str:
+def execute(post_item: dict, website_settings: dict, event_data: dict | None = None) -> str:
     """Generates the research draft text using OpenAI based on input context."""
     
     if not llm_client:
         logger.error("LLM Client not initialized during function call.")
         raise ValueError("LLM Client not initialized.")
-
+    
+    blog_title = post_item.get(Constants.BLOG_TITLE)
+    if not blog_title:
+         logger.error(f"Missing '{Constants.BLOG_TITLE}' in post_item for postId '{post_item.get(Constants.POST_ID)}'")
+         raise ValueError(f"Missing '{Constants.BLOG_TITLE}' in post item.")
+    
     logger.info(f"Generating research draft for Title: {blog_title}")
 
     # Extract context from settings
-    website_desc = website_settings.get('websiteDescription', '')
-    target_audience = website_settings.get('targetAudience', '')
-    core_keywords = website_settings.get('coreKeywords', [])
+    website_desc = website_settings.get(Constants.WEBSITE_DESCRIPTION, '')
+    target_audience = website_settings.get(Constants.TARGET_AUDIENCE, 'a general audience')
+    core_keywords = website_settings.get(Constants.CORE_KEYWORDS, [])
 
-    # Construct Prompt (same as before)
     prompt = f"""
     Please act as an expert researcher and writer. Your task is to generate a comprehensive, deeply researched draft article on the topic: "{blog_title}".
 

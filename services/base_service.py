@@ -50,7 +50,7 @@ class BaseContentService(ABC):
         pass
 
     @abstractmethod
-    def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, previous_step_output: any = None) -> any:
+    def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, event_data: dict) -> any:
         """Calls the selected agent function with appropriate arguments and returns its output."""
         # Subclasses will format inputs for their specific agent and call it
         pass
@@ -66,14 +66,14 @@ class BaseContentService(ABC):
     def process_request(self, event_data: dict) -> dict:
         """Executes the common workflow for a content generation step."""
 
-        post_id = event_data.get('postId')
-        website_id = event_data.get('websiteId')
+        post_id = event_data.get(Constants.POST_ID)
+        website_id = event_data.get(Constants.WEBSITE_ID)
 
         if not post_id or not website_id:
              logger.error(f"{self.service_name}: Missing postId or websiteId in input data.")
              raise ServiceError("Missing required input data for service.", 400, service_name=self.service_name)
 
-        current_status = f"{self.status_prefix}_FAILED" # Default status in case of early exit in error block
+        current_status = f"{self.status_prefix}{Constants.STATUS_FAILED_SUFFIX}" # Default status in case of early exit in error block
         
         try:
             logger.info(f"[{self.service_name}] Starting process for postId: {post_id}, websiteId: {website_id}")
@@ -81,7 +81,7 @@ class BaseContentService(ABC):
             # --- 1. Update Status: STARTED ---
             logger.info("--- 1. Update Status: STARTED ---")
 
-            self._update_status(post_id, f"{self.status_prefix}_STARTED")
+            self._update_status(post_id, f"{self.status_prefix}{Constants.STATUS_STARTED_SUFFIX}")
 
             # --- 2. Fetch Post Data & Validate Website ID ---
             logger.info("--- 2. Fetch Post Data & Validate Website ID ---")
@@ -126,20 +126,21 @@ class BaseContentService(ABC):
             logger.info("--- 6. Save Output to S3 ---")
 
             logger.info(f"[{self.service_name}] Saving agent output to S3...")
-            s3_uri = self._save_agent_output(website_id, post_id, agent_output)
-            if not s3_uri:
-                raise ServiceError("Failed to save agent output to S3.", 500, service_name=self.service_name)
-            logger.info(f"[{self.service_name}] Output saved successfully to: {s3_uri}")
+            save_result = self._save_agent_output(website_id, post_id, agent_output) 
+            # save_result could be S3 URI or status string like "DynamoDB_Updated"
+            if save_result is None: 
+                raise ServiceError("Failed to save agent output.", 500, service_name=self.service_name)
+            logger.info(f"[{self.service_name}] Output saved successfully.")
 
             # --- 7. Update Post Item URI ---
             logger.info("--- 7. Update Post Item URI ---")
 
-            self._update_db_uri(post_id, s3_uri)
+            self._update_db_uri(post_id, save_result)
 
             # --- 8. Update Status: COMPLETE ---
             logger.info("--- 8. Update Status: COMPLETE ---")
 
-            current_status = f"{self.status_prefix}_COMPLETE" # Update before final status update
+            current_status = f"{self.status_prefix}{Constants.STATUS_COMPLETE_SUFFIX}" # Update before final status update
             self._update_status(post_id, current_status)
 
             # --- 9. Prepare Success Result ---
@@ -150,8 +151,10 @@ class BaseContentService(ABC):
             result = {
                 "message": f"{self.service_name} processed successfully.",
                 "postId": post_id,
-                self.output_uri_db_key: s3_uri # Use the dynamic key name
             }
+            if self.output_uri_db_key not in [Constants.IMAGE_PROMPTS]: # Add other non-URI keys if needed
+                if isinstance(save_result, str) and save_result.startswith("s3://"):
+                    result[self.output_uri_db_key] = save_result
             return result
 
         except Exception as e:
@@ -163,7 +166,6 @@ class BaseContentService(ABC):
                 raise
             else:
                 raise ServiceError(f"An unexpected error occurred during {self.service_name} processing.", 500, service_name=self.service_name) from e
-
 
     # --- Internal Helper Methods ---
 

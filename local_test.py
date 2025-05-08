@@ -21,7 +21,7 @@ from services.image_gen_service import ImageGenService
 
 # --- Test Configuration ---
 TEST_WEBSITE_ID = "my-test-blog-v1" # Use an ID that exists in your DynamoDB
-TEST_POST_ID = "test-post-001"    # Use an ID that exists in your DynamoDB
+TEST_POST_ID = "test-post-002"    # Use an ID that exists in your DynamoDB
 
 if __name__ == "__main__":
     setup_logging() # Set up logging based on LOG_LEVEL env var
@@ -40,12 +40,22 @@ if __name__ == "__main__":
 
         # Execute the service method
         # test_service = ResearchService()
+        # result = test_service.process_request(event_data)
+        # print("\n--- Test Result ---")
+        # print(f"Success: {result}")
+
         # test_service = RefineService()
+        # result = test_service.process_request(event_data)
+        # print("\n--- Test Result ---")
+        # print(f"Success: {result}")
+
         # test_service = ImagePromptService()
+        # result = test_service.process_request(event_data)
+        # print("\n--- Test Result ---")
+        # print(f"Success: {result}")
+
         test_service = ImageGenService()
-
         result = test_service.process_request(event_data)
-
         print("\n--- Test Result ---")
         print(f"Success: {result}")
 

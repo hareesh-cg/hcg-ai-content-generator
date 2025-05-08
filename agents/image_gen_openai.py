@@ -16,14 +16,12 @@ except Exception as e:
     logger.exception("CRITICAL: Error initializing LLM client for ImageGenAgent.")
     llm_client = None
 
-def generate_image_from_prompt(prompt: str, website_settings: dict) -> str | None:
+def execute(post_item: dict, website_settings: dict, event_data: dict) -> str | None:
     """Generates an image using OpenAI's DALL-E model based on a prompt and settings."""
-    if not llm_client:
-        logger.error("LLM Client not initialized during image generation function call.")
-        raise ValueError("LLM Client not initialized.")
+    prompt = event_data.get('prompt') # Get text from event_data
     if not prompt:
-        logger.warning("Received empty prompt for image generation.")
-        return None
+        logger.error("Missing 'prompt' in event_data for image gen agent.")
+        raise ValueError("Missing 'prompt' for image gen agent.")
 
     logger.info(f"Starting image generation for prompt: '{prompt[:100]}...'") # Log snippet
 

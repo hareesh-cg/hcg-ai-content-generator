@@ -1,20 +1,23 @@
 import os
-from utils.logger_config import get_logger
+
 from services.base_service import BaseContentService 
+
+from utils.logger_config import get_logger
 from utils.dynamodb_helper import DynamoDBHelper # For constants AND saving prompts
 from utils.s3_helper import S3Helper # To read refined article
-from utils.errors import ServiceError 
-from agents.image_prompt_openai import generate_image_prompts_and_slugs as generate_openai_prompts_slugs
+from utils.errors import ServiceError
 import utils.constants as Constants
 
+from agents.image_prompt_openai import execute as generate_openai_prompts_slugs
+from agents.image_slug_openai import generate_slugs_from_prompts as generate_openai_slugs
+
 logger = get_logger(__name__)
-SERVICE_NAME = "ImagePromptService"
 
 class ImagePromptService(BaseContentService): 
     """Orchestrates the image prompt generation process."""
 
     def __init__(self):
-        super().__init__(service_name=SERVICE_NAME) 
+        super().__init__(service_name="ImagePromptService") 
 
     # --- Implement Abstract Properties ---
     @property
@@ -25,17 +28,20 @@ class ImagePromptService(BaseContentService):
     def output_uri_db_key(self) -> str:
         # This service outputs prompts directly to DynamoDB, not an S3 URI
         # We'll use the standard DynamoDB constant for the prompts list
-        return Constants.IMAGE_PROMPTS 
+        return Constants.IMAGE_PROMPTS
 
     # --- Implement Abstract Methods ---
-
     def _select_agent(self, website_settings: dict, post_item: dict | None = None, previous_step_output: any = None) -> callable:
-        """Selects the image prompt agent."""
-        logger.info(f"[{self.service_name}] Selecting OpenAI agent for image prompts.")
+        """Selects the agent function to call based on settings."""
+        # For this service, we always use the OpenAI image prompt agent
+        logger.info(f"[{self.service_name}] Selecting OpenAI Image Prompt Agent.")
         return generate_openai_prompts_slugs
 
-    def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, previous_step_output: dict) -> any:
-        """Downloads refined content and calls the image prompt agent."""
+    def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, event_data: dict) -> any:
+        """
+        Downloads refined content and calls the image prompt agent.
+        Returns a list of dictionaries: [{'prompt': '...', 'slug': '...'}]
+        """
         
         refined_article_uri = post_item.get(Constants.REFINED_ARTICLE_URI) 
         if not refined_article_uri:
@@ -50,20 +56,35 @@ class ImagePromptService(BaseContentService):
             raise ServiceError(f"Failed to download refined article from {refined_article_uri}.", 500, service_name=self.service_name)
         
         logger.info(f"[{self.service_name}] Refined article downloaded. Length: {len(refined_article_text)}")
-
-        # Add blogTitle to settings for agent context if available
-        website_settings_for_agent = website_settings.copy()
-        website_settings_for_agent['blogTitle'] = post_item.get(Constants.BLOG_TITLE, "the article topic")
         
+        event_data["refined_article_content"] = refined_article_text # Add to event data for agent
         # Call the selected agent function
         # Agent returns a list of strings (prompts)
-        prompt_slug_list = agent_function(
-            refined_article_content=refined_article_text,
-            website_settings=website_settings_for_agent
+        prompt_list = agent_function(
+            post_item=post_item,
+            website_settings=website_settings,
+            event_data=event_data
         )
         
-        # Return the list of prompts
-        return prompt_slug_list
+        if not prompt_list:
+             raise ServiceError("Image prompt agent returned no prompts.", 500, service_name=self.service_name)
+        logger.info(f"[{self.service_name}] Got {len(prompt_list)} prompts from agent.")
+
+        # --- Step 2: Generate Slugs ---
+        logger.info(f"[{self.service_name}] Calling agent to generate slugs...")
+        slug_list = generate_openai_slugs(image_prompts=prompt_list) # Call specific agent
+        if not slug_list or len(slug_list) != len(prompt_list):
+             logger.error(f"Slug generation failed or returned incorrect number of slugs ({len(slug_list)} vs {len(prompt_list)}).")
+             raise ServiceError("Failed to generate valid slugs for all prompts.", 500, service_name=self.service_name)
+        logger.info(f"[{self.service_name}] Got {len(slug_list)} slugs from agent.")
+
+        # --- Step 3: Combine Prompts and Slugs ---
+        combined_data = []
+        for prompt, slug in zip(prompt_list, slug_list):
+             combined_data.append({"prompt": prompt, "slug": slug})
+             
+        logger.info(f"[{self.service_name}] Combined prompts and slugs.")
+        return combined_data
 
     def _save_agent_output(self, website_id: str, post_id: str, agent_output: any) -> str | None:
         """Saves the list of image prompts directly to DynamoDB. Returns None as there's no S3 URI."""

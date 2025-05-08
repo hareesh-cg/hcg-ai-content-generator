@@ -2,24 +2,24 @@ import os
 
 from utils.logger_config import get_logger
 # Import base class, helpers, errors
-from services.base_service import BaseContentService 
+from services.base_service import BaseContentService
+
 from utils.dynamodb_helper import DynamoDBHelper # Still need constants
 from utils.s3_helper import S3Helper
 from utils.errors import ServiceError
 import utils.constants as Constants
 
 # Import the specific agent implementation
-from agents.research_openai import generate_research_draft as generate_openai_draft
+from agents.research_openai import execute as generate_openai_draft
 
 logger = get_logger(__name__)
-SERVICE_NAME = "ResearchService"
 
 class ResearchService(BaseContentService): # Inherit from base
     """Orchestrates the research article generation process."""
 
     def __init__(self):
         # Initialize the base class, passing the service name
-        super().__init__(service_name=SERVICE_NAME)
+        super().__init__(service_name="ResearchService")
 
     # --- Implement Abstract Properties ---
     @property
@@ -39,7 +39,7 @@ class ResearchService(BaseContentService): # Inherit from base
         logger.info(f"[{self.service_name}] Selecting OpenAI agent.")
         return generate_openai_draft # Return the function object
 
-    def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, previous_step_output: any = None) -> any:
+    def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, event_data: dict) -> any:
         """Calls the research agent."""
         blog_title = post_item.get(Constants.BLOG_TITLE)
         if not blog_title:
@@ -47,8 +47,9 @@ class ResearchService(BaseContentService): # Inherit from base
             
         # Call the selected agent function (which is generate_openai_draft in this case)
         return agent_function(
-            blog_title=blog_title,
-            website_settings=website_settings
+            post_item=post_item,
+            website_settings=website_settings,
+            event_data=event_data
         )
 
     def _save_agent_output(self, website_id: str, post_id: str, agent_output: any) -> str | None:

@@ -3,9 +3,10 @@ import boto3
 from botocore.exceptions import ClientError
 import requests
 import mimetypes
+import re
 
 import utils.constants as Constants
-from utils.logger_config import get_logger # Use the logger helper
+from utils.logger_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -133,7 +134,8 @@ class S3Helper:
 
         logger.info(f"Downloading image from URL: {image_url} (for slug: {slug})")
         try:
-            response = requests.get(image_url, stream=True, timeout=30)
+            response = requests.get(image_url, stream=True, timeout=60)
+            logger.info(f"requests.get status code: {response.status_code}")
             response.raise_for_status() 
 
             content_type = response.headers.get('content-type', 'image/png') 
@@ -160,7 +162,6 @@ class S3Helper:
             logger.info(f"Image upload successful. URI: {s3_uri}")
             return s3_uri
 
-        except requests.exceptions.RequestException as re: ... # logging as before
-        except ClientError as ce: ... # logging as before
-        except Exception as e: ... # logging as before
-        return None # Return None on any failure
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred during image download/upload for {image_url} \n --- \n Error: {e}")
+            return None

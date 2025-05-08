@@ -25,6 +25,7 @@ IMAGE_ASPECT_RATIO = "imageAspectRatio"
 NEGATIVE_IMAGE_PROMPTS = "negativeImagePrompts"
 CORE_KEYWORDS = "coreKeywords"
 NUM_IMAGE_PROMPTS = "numImagePrompts"
+SEO_INSTRUCTIONS = "seoInstructions"
 
 # S3 Key Prefixes / Names
 S3_RESEARCH_FILENAME = "research_article.txt"

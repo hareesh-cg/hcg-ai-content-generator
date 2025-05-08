@@ -18,46 +18,34 @@ from services.research_service import ResearchService
 from services.refine_service import RefineService
 from services.image_prompt_service import ImagePromptService
 from services.image_gen_service import ImageGenService
+from services.metadata_service import MetadataService
 
 # --- Test Configuration ---
 TEST_WEBSITE_ID = "my-test-blog-v1" # Use an ID that exists in your DynamoDB
-TEST_POST_ID = "test-post-002"    # Use an ID that exists in your DynamoDB
+TEST_POST_ID = "test-post-001"    # Use an ID that exists in your DynamoDB
+
+def test_function(test_service: object) -> None:
+    """A simple test function to demonstrate the test structure."""
+
+    event_data = {
+            "postId": TEST_POST_ID,
+            "websiteId": TEST_WEBSITE_ID
+        }
+    
+    print(f"Testing {test_service.__class__.__name__} with postId: {TEST_POST_ID} and websiteId: {TEST_WEBSITE_ID}")
+    result = test_service.process_request(event_data)
+    print("\n--- Test Result ---")
+    print(f"Success: {result}")
 
 if __name__ == "__main__":
     setup_logging() # Set up logging based on LOG_LEVEL env var
 
-    print(f"--- Testing ResearchService for postId: {TEST_POST_ID} ---")
-
     try:
-        # Instantiate the service (will read env vars for table/bucket names)
-        
-
-        # Prepare the input data dictionary expected by process_request
-        event_data = {
-            "postId": TEST_POST_ID,
-            "websiteId": TEST_WEBSITE_ID
-        }
-
-        # Execute the service method
-        # test_service = ResearchService()
-        # result = test_service.process_request(event_data)
-        # print("\n--- Test Result ---")
-        # print(f"Success: {result}")
-
-        # test_service = RefineService()
-        # result = test_service.process_request(event_data)
-        # print("\n--- Test Result ---")
-        # print(f"Success: {result}")
-
-        # test_service = ImagePromptService()
-        # result = test_service.process_request(event_data)
-        # print("\n--- Test Result ---")
-        # print(f"Success: {result}")
-
-        test_service = ImageGenService()
-        result = test_service.process_request(event_data)
-        print("\n--- Test Result ---")
-        print(f"Success: {result}")
+        # test_function(ResearchService())
+        # test_function(RefineService())
+        # test_function(ImagePromptService())
+        # test_function(ImageGenService())
+        test_function(MetadataService())
 
     except ServiceError as se:
         print(f"\n--- Test Failed (ServiceError) ---")

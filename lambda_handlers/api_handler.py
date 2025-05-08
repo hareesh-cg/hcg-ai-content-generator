@@ -8,6 +8,7 @@ from services.research_service import ResearchService
 from services.refine_service import RefineService
 from services.image_prompt_service import ImagePromptService
 from services.image_gen_service import ImageGenService
+from services.metadata_service import MetadataService
 
 setup_logging() 
 logger = get_logger(__name__)
@@ -17,6 +18,7 @@ SERVICE_MAP = {
     "refine": RefineService,
     "image_prompt": ImagePromptService,
     "image_gen": ImageGenService,
+    "metadata": MetadataService,
 }
 
 # --- API Gateway Response Helper (remains the same) ---

@@ -4,7 +4,7 @@ from services.base_service import BaseContentService
 from utils.dynamodb_helper import DynamoDBHelper # For constants AND saving prompts
 from utils.s3_helper import S3Helper # To read refined article
 from utils.errors import ServiceError 
-from agents.image_prompt_openai import generate_image_prompts as generate_openai_prompts
+from agents.image_prompt_openai import generate_image_prompts_and_slugs as generate_openai_prompts_slugs
 import utils.constants as Constants
 
 logger = get_logger(__name__)
@@ -32,7 +32,7 @@ class ImagePromptService(BaseContentService):
     def _select_agent(self, website_settings: dict, post_item: dict | None = None, previous_step_output: any = None) -> callable:
         """Selects the image prompt agent."""
         logger.info(f"[{self.service_name}] Selecting OpenAI agent for image prompts.")
-        return generate_openai_prompts
+        return generate_openai_prompts_slugs
 
     def _call_agent(self, agent_function: callable, post_item: dict, website_settings: dict, previous_step_output: dict) -> any:
         """Downloads refined content and calls the image prompt agent."""
@@ -57,36 +57,30 @@ class ImagePromptService(BaseContentService):
         
         # Call the selected agent function
         # Agent returns a list of strings (prompts)
-        image_prompts_list = agent_function(
+        prompt_slug_list = agent_function(
             refined_article_content=refined_article_text,
-            website_settings=website_settings_for_agent 
-            # num_prompts= can be passed from website_settings if needed
+            website_settings=website_settings_for_agent
         )
         
         # Return the list of prompts
-        return image_prompts_list
+        return prompt_slug_list
 
     def _save_agent_output(self, website_id: str, post_id: str, agent_output: any) -> str | None:
         """Saves the list of image prompts directly to DynamoDB. Returns None as there's no S3 URI."""
-        if not isinstance(agent_output, list):
-             logger.error(f"[{self.service_name}] Agent output was not a list, cannot save prompts.")
-             return None # Indicate failure to save
+        if not isinstance(agent_output, list) or not all(isinstance(d, dict) for d in agent_output):
+             logger.error(f"[{self.service_name}] Agent output was not a list of dicts, cannot save prompts/slugs.")
+             return None 
 
-        logger.info(f"[{self.service_name}] Saving {len(agent_output)} image prompts to DynamoDB for postId {post_id}")
+        logger.info(f"[{self.service_name}] Saving {len(agent_output)} prompt/slug pairs to DynamoDB for postId {post_id}")
         
-        # Use the generic update method from the DB helper
-        # The key is the constant for the imagePrompts attribute
-        # The value is the list itself (agent_output)
+        # Save the list of dictionaries under the IMAGE_PROMPTS key
         update_success = self.db_helper.update_post_item(post_id, {Constants.IMAGE_PROMPTS: agent_output})
 
         if not update_success:
-            logger.error(f"[{self.service_name}] Failed to save image prompts to DynamoDB for postId {post_id}.")
-            return None # Indicate failure
+            logger.error(f"[{self.service_name}] Failed to save prompts/slugs to DynamoDB for postId {post_id}.")
+            return None 
         
-        logger.info(f"[{self.service_name}] Image prompts successfully saved to DynamoDB for postId {post_id}.")
-        # Return None because this step doesn't produce an S3 URI to be stored in the standard DB key field.
-        # The status update in the base class will still happen.
-        # We override the _update_db_uri method below to handle this.
+        logger.info(f"[{self.service_name}] Prompt/slug pairs successfully saved to DynamoDB for postId {post_id}.")
         return "DynamoDB_Updated" # Return a non-None placeholder to signal success to base class
 
 

@@ -148,30 +148,57 @@ def generate_image_prompts_and_slugs(refined_article_content: str, website_setti
         # --- UPDATED PARSING ---
         try:
             output_data = json.loads(response_content)
-            # Expecting a list directly, or under a key like 'results' or 'prompts'
-            prompt_slug_list = output_data if isinstance(output_data, list) else output_data.get("results") or output_data.get("prompts")
+            
+            # Initialize empty list
+            prompt_slug_list_raw = []
 
-            if isinstance(prompt_slug_list, list) and \
-               all(isinstance(item, dict) and "prompt" in item and "slug" in item for item in prompt_slug_list):
-                
-                # Basic validation on slugs? (Optional)
-                validated_list = []
-                for item in prompt_slug_list[:num_prompts]:
-                    # Simple cleanup in case LLM didn't follow rules perfectly
-                    slug = item.get("slug", f"image-{len(validated_list)}").lower()
-                    slug = ''.join(c for c in slug if c.isalnum() or c == '-') # Keep only alphanum and hyphen
-                    slug = '-'.join(slug.split('-')) # Remove multiple hyphens? (more advanced slugify needed for robustness)
-                    item["slug"] = slug if slug else f"image-{len(validated_list)}" # Ensure slug isn't empty
-                    validated_list.append(item)
-
-                logger.info(f"Successfully parsed {len(validated_list)} prompt/slug pairs from LLM response.")
-                return validated_list
+            # Check if the output is the expected list of dicts
+            if isinstance(output_data, list):
+                prompt_slug_list_raw = output_data
+            # Check if it's a dictionary containing a list under a common key
+            elif isinstance(output_data, dict):
+                list_candidate = output_data.get("results") or output_data.get("prompts") or output_data.get("prompt_slug_list")
+                if isinstance(list_candidate, list):
+                    prompt_slug_list_raw = list_candidate
+                # --- ADDED: Handle case where it returns a single dict ---
+                elif "prompt" in output_data and "slug" in output_data:
+                    logger.warning("LLM returned a single prompt/slug object instead of a list. Processing as a single item.")
+                    prompt_slug_list_raw = [output_data] # Wrap the single dict in a list
+                else:
+                    logger.error(f"LLM returned a JSON dictionary but not in a recognized list format: {output_data}")
+                    raise ValueError("LLM response was a dictionary but didn't contain the expected prompt/slug data structure.")
             else:
-                logger.error(f"LLM response was valid JSON but not the expected list of {{'prompt':..., 'slug':...}} objects: {output_data}")
-                raise ValueError("LLM did not return the expected JSON list format for prompts/slugs.")
+                logger.error(f"LLM response was valid JSON but neither a list nor a recognized dictionary format: {type(output_data)}")
+                raise ValueError("LLM response was not a list or expected dictionary format.")
+
+            # Now validate the contents of prompt_slug_list_raw
+            validated_list = []
+            if isinstance(prompt_slug_list_raw, list):
+                for item in prompt_slug_list_raw:
+                    # Validate each item is a dict with required keys
+                    if isinstance(item, dict) and "prompt" in item and "slug" in item:
+                        # Simple cleanup/validation for slug
+                        slug = item.get("slug", f"image-{len(validated_list)}").lower()
+                        slug = ''.join(c for c in slug if c.isalnum() or c == '-') 
+                        slug = '-'.join(slug.split('-')) 
+                        item["slug"] = slug if slug else f"image-{len(validated_list)}"
+                        validated_list.append(item)
+                    else:
+                        logger.warning(f"Skipping invalid item in LLM response list: {item}")
+            
+            # Ensure we don't exceed requested number, even if LLM gave more
+            final_prompts_slugs = validated_list[:num_prompts] 
+
+            if not final_prompts_slugs:
+                logger.error(f"LLM response parsed, but no valid prompt/slug pairs were found. Raw list was: {prompt_slug_list_raw}")
+                raise ValueError("LLM response parsed, but yielded no valid prompt/slug pairs.")
+
+            logger.info(f"Successfully parsed {len(final_prompts_slugs)} prompt/slug pairs from LLM response.")
+            return final_prompts_slugs
+
         except (json.JSONDecodeError, TypeError, AttributeError) as json_e:
-             logger.error(f"Failed to parse JSON response from LLM: {json_e}. Response was: {response_content}")
-             raise ValueError("Failed to parse image prompt/slug list from LLM response.") from json_e
+            logger.error(f"Failed to parse JSON response from LLM: {json_e}. Response was: {response_content}")
+            raise ValueError("Failed to parse image prompt/slug list from LLM response.") from json_e
 
     except Exception as e:
         logger.exception("An error occurred during the image prompt/slug LLM call.")

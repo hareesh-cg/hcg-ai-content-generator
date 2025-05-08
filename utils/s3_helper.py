@@ -124,3 +124,43 @@ class S3Helper:
         except Exception as e:
             logger.exception(f"An unexpected error occurred during image download/upload for {image_url}")
             return None
+        
+    def download_and_save_image_with_slug(self, image_url: str, website_id: str, post_id: str, slug: str) -> str | None:
+        """Downloads an image from a URL and saves it to S3 using a provided slug for the filename."""
+        
+        if not image_url: logger.error("No image URL provided."); return None
+        if not slug: logger.warning("Empty slug provided, using default."); slug="image" # Handle empty slug
+
+        logger.info(f"Downloading image from URL: {image_url} (for slug: {slug})")
+        try:
+            response = requests.get(image_url, stream=True, timeout=30)
+            response.raise_for_status() 
+
+            content_type = response.headers.get('content-type', 'image/png') 
+            extension = mimetypes.guess_extension(content_type) or '.png' 
+
+            # Clean the slug further (optional but recommended)
+            # Keep alphanumeric and hyphen, ensure single hyphens
+            clean_slug = re.sub(r'[^a-z0-9-]+', '', slug.lower()) # Remove invalid chars
+            clean_slug = re.sub(r'-+', '-', clean_slug).strip('-') # Consolidate hyphens
+            if not clean_slug: clean_slug = "image" # Ensure not empty after cleaning
+            
+            filename = f"{clean_slug}{extension}"
+            s3_key = f"{website_id}/{post_id}/{Constants.S3_IMAGE_FOLDER}/{filename}"
+
+            logger.info(f"Uploading downloaded image to s3://{self.bucket_name}/{s3_key} (Content-Type: {content_type})")
+            self.s3_client.upload_fileobj(
+                response.raw, 
+                self.bucket_name,
+                s3_key,
+                ExtraArgs={'ContentType': content_type}
+            )
+
+            s3_uri = f"s3://{self.bucket_name}/{s3_key}"
+            logger.info(f"Image upload successful. URI: {s3_uri}")
+            return s3_uri
+
+        except requests.exceptions.RequestException as re: ... # logging as before
+        except ClientError as ce: ... # logging as before
+        except Exception as e: ... # logging as before
+        return None # Return None on any failure

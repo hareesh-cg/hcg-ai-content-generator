@@ -19,10 +19,11 @@ from services.refine_service import RefineService
 from services.image_prompt_service import ImagePromptService
 from services.image_gen_service import ImageGenService
 from services.metadata_service import MetadataService
+from services.markdown_service import MarkdownService
 
 # --- Test Configuration ---
 TEST_WEBSITE_ID = "my-test-blog-v1" # Use an ID that exists in your DynamoDB
-TEST_POST_ID = "test-post-001"    # Use an ID that exists in your DynamoDB
+TEST_POST_ID = "test-post-002"    # Use an ID that exists in your DynamoDB
 
 def test_function(test_service: object) -> None:
     """A simple test function to demonstrate the test structure."""
@@ -45,7 +46,8 @@ if __name__ == "__main__":
         # test_function(RefineService())
         # test_function(ImagePromptService())
         # test_function(ImageGenService())
-        test_function(MetadataService())
+        # test_function(MetadataService())
+        test_function(MarkdownService())
 
     except ServiceError as se:
         print(f"\n--- Test Failed (ServiceError) ---")
